@@ -248,10 +248,10 @@ function RfpDetail() {
             <button onClick={handleFetchEmails} className="btn btn-secondary" disabled={fetching}>
               {fetching ? 'Checking...' : 'Fetch Emails'}
             </button>
-            <button onClick={() => setShowAddProposal(!showAddProposal)} className="btn btn-secondary">
-              Add Manually
+            <button onClick={() => setShowAddProposal(!showAddProposal)} className="btn btn-primary">
+              + Add Manually
             </button>
-            <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+            <label className="btn btn-success" style={{ cursor: 'pointer' }}>
               Upload PDF
               <input type="file" accept=".pdf" onChange={handleUploadPdf} style={{ display: 'none' }} />
             </label>
