@@ -21,7 +21,7 @@ function VendorList() {
       const res = await listVendors({ search });
       setVendors(res.data);
     } catch (err) {
-      console.error('Failed to load vendors:', err);
+      // silently handled
     } finally {
       setLoading(false);
     }

@@ -106,7 +106,13 @@ async function uploadProposal(req, res, next) {
 async function listProposals(req, res, next) {
   try {
     const where = {};
-    if (req.query.rfpId) where.rfpId = req.query.rfpId;
+    if (req.query.rfpId) {
+      const rfpId = parseInt(req.query.rfpId, 10);
+      if (isNaN(rfpId) || rfpId <= 0) {
+        return res.status(400).json({ error: 'Invalid rfpId' });
+      }
+      where.rfpId = rfpId;
+    }
 
     const proposals = await Proposal.findAll({
       where,

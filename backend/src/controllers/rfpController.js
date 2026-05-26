@@ -9,6 +9,9 @@ async function createRfp(req, res, next) {
     if (!rawInput || !rawInput.trim()) {
       return res.status(400).json({ error: 'rawInput is required' });
     }
+    if (rawInput.length > 10000) {
+      return res.status(400).json({ error: 'rawInput exceeds maximum length of 10,000 characters' });
+    }
 
     // AI: parse natural language into structured data
     const structuredData = await aiService.parseRfpFromNaturalLanguage(rawInput);
@@ -106,8 +109,11 @@ async function sendRfpToVendors(req, res, next) {
     if (!rfp) return res.status(404).json({ error: 'RFP not found' });
 
     const { vendorIds } = req.body;
-    if (!vendorIds || !vendorIds.length) {
-      return res.status(400).json({ error: 'vendorIds array is required' });
+    if (!Array.isArray(vendorIds) || !vendorIds.length) {
+      return res.status(400).json({ error: 'vendorIds must be a non-empty array' });
+    }
+    if (!vendorIds.every((id) => Number.isInteger(id) && id > 0)) {
+      return res.status(400).json({ error: 'All vendorIds must be positive integers' });
     }
 
     const vendors = await Vendor.findAll({ where: { id: vendorIds } });

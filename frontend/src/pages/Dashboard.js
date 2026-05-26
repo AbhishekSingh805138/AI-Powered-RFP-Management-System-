@@ -25,7 +25,7 @@ function Dashboard() {
         });
         setRecentRfps(rfps.slice(0, 5));
       } catch (err) {
-        console.error('Dashboard load error:', err);
+        // silently handled — error state could be added if needed
       } finally {
         setLoading(false);
       }

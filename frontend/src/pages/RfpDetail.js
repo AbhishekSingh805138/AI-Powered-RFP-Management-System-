@@ -19,6 +19,8 @@ function RfpDetail() {
   const [showAddProposal, setShowAddProposal] = useState(false);
   const [manualProposal, setManualProposal] = useState({ vendorId: '', rawContent: '' });
   const [comparisonResult, setComparisonResult] = useState(null);
+  const [pdfFile, setPdfFile] = useState(null);
+  const [pdfVendorId, setPdfVendorId] = useState('');
 
   const loadRfp = useCallback(async () => {
     try {
@@ -89,26 +91,31 @@ function RfpDetail() {
     }
   };
 
-  const handleUploadPdf = async (e) => {
+  const handlePdfSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    setPdfFile(file);
+    setPdfVendorId('');
+    e.target.value = '';
+  };
 
-    const vendorId = prompt('Enter Vendor ID for this PDF proposal:');
-    if (!vendorId) return;
+  const handleUploadPdf = async () => {
+    if (!pdfFile || !pdfVendorId) return;
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', pdfFile);
     formData.append('rfpId', id);
-    formData.append('vendorId', vendorId);
+    formData.append('vendorId', pdfVendorId);
 
     try {
       await uploadProposal(formData);
       setMessage('PDF uploaded and text extracted');
+      setPdfFile(null);
+      setPdfVendorId('');
       await loadRfp();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to upload PDF');
     }
-    e.target.value = '';
   };
 
   const handleParseProposal = async (proposalId) => {
@@ -253,10 +260,31 @@ function RfpDetail() {
             </button>
             <label className="btn btn-success" style={{ cursor: 'pointer' }}>
               Upload PDF
-              <input type="file" accept=".pdf" onChange={handleUploadPdf} style={{ display: 'none' }} />
+              <input type="file" accept=".pdf" onChange={handlePdfSelect} style={{ display: 'none' }} />
             </label>
           </div>
         </div>
+
+        {pdfFile && (
+          <div className="mt-16" style={{ borderTop: '1px solid #eee', paddingTop: 16, marginBottom: 16 }}>
+            <h3>Upload PDF: {pdfFile.name}</h3>
+            <div className="grid-2" style={{ marginTop: 8 }}>
+              <div className="form-group">
+                <label>Select Vendor for this PDF</label>
+                <select value={pdfVendorId} onChange={(e) => setPdfVendorId(e.target.value)}>
+                  <option value="">Select vendor...</option>
+                  {allVendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <button onClick={handleUploadPdf} className="btn btn-primary" disabled={!pdfVendorId} style={{ marginRight: 8 }}>
+              Upload
+            </button>
+            <button onClick={() => { setPdfFile(null); setPdfVendorId(''); }} className="btn btn-secondary">
+              Cancel
+            </button>
+          </div>
+        )}
 
         {showAddProposal && (
           <form onSubmit={handleAddProposal} className="mt-16" style={{ borderTop: '1px solid #eee', paddingTop: 16 }}>

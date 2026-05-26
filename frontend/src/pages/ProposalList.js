@@ -17,7 +17,7 @@ function ProposalList() {
       const res = await listProposals();
       setProposals(res.data);
     } catch (err) {
-      console.error('Failed to load proposals:', err);
+      // silently handled
     } finally {
       setLoading(false);
     }

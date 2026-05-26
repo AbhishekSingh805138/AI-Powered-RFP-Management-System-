@@ -15,7 +15,7 @@ function RfpList() {
       const res = await listRfps();
       setRfps(res.data);
     } catch (err) {
-      console.error('Failed to load RFPs:', err);
+      // silently handled
     } finally {
       setLoading(false);
     }
