@@ -6,9 +6,22 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "db:sync": "node src/config/sync-db.js"
+    "db:sync": "node src/config/sync-db.js",
+    "test": "jest --forceExit --detectOpenHandles",
+    "test:coverage": "jest --forceExit --detectOpenHandles --coverage",
+    "test:unit": "jest --forceExit __tests__/unit",
+    "test:api": "jest --forceExit __tests__/api",
+    "test:integration": "jest --forceExit __tests__/integration",
+    "test:middleware": "jest --forceExit __tests__/middleware",
+    "migrate": "npx sequelize-cli db:migrate",
+    "migrate:undo": "npx sequelize-cli db:migrate:undo",
+    "migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",
+    "migrate:status": "npx sequelize-cli db:migrate:status",
+    "seed": "npx sequelize-cli db:seed:all",
+    "seed:undo": "npx sequelize-cli db:seed:undo:all"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -16,6 +29,7 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
     "imap": "^0.8.19",
+    "jsonwebtoken": "^9.0.3",
     "mailparser": "^3.7.1",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.14",
@@ -26,6 +40,9 @@
     "sequelize": "^6.37.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "jest": "^30.4.2",
+    "nodemon": "^3.1.4",
+    "sequelize-cli": "^6.6.5",
+    "supertest": "^7.2.2"
   }
 }

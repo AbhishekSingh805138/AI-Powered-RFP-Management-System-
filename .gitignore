@@ -4,6 +4,7 @@ node_modules/
 .env.*.local
 .claude/
 .refact/
+CLAUDE.md
 dist/
 build/
 *.log

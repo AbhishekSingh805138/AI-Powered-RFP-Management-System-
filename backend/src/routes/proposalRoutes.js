@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
+const { requireRole } = require('../middleware/auth');
 const proposalController = require('../controllers/proposalController');
 
 const upload = multer({
@@ -15,11 +16,11 @@ const upload = multer({
   },
 });
 
-router.post('/manual', proposalController.createProposal);
-router.post('/upload', upload.single('file'), proposalController.uploadProposal);
-router.post('/fetch-emails', proposalController.fetchAndProcessEmails);
 router.get('/', proposalController.listProposals);
 router.get('/:id', proposalController.getProposal);
-router.post('/:id/parse', proposalController.parseProposal);
+router.post('/manual', requireRole('admin', 'manager'), proposalController.createProposal);
+router.post('/upload', requireRole('admin', 'manager'), upload.single('file'), proposalController.uploadProposal);
+router.post('/fetch-emails', requireRole('admin', 'manager'), proposalController.fetchAndProcessEmails);
+router.post('/:id/parse', requireRole('admin', 'manager'), proposalController.parseProposal);
 
 module.exports = router;

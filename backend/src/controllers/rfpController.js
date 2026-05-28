@@ -25,6 +25,7 @@ async function createRfp(req, res, next) {
       deliveryDays: structuredData.timeline?.deliveryDays || null,
       deadline: structuredData.timeline?.deadline || null,
       status: 'draft',
+      userId: req.user.id,
     });
 
     res.status(201).json(rfp);
@@ -33,10 +34,16 @@ async function createRfp(req, res, next) {
   }
 }
 
-// GET /api/rfps — List all RFPs
+// GET /api/rfps — List RFPs (scoped to user, admins see all)
 async function listRfps(req, res, next) {
   try {
+    const where = {};
+    if (req.user.role !== 'admin') {
+      where.userId = req.user.id;
+    }
+
     const rfps = await Rfp.findAll({
+      where,
       order: [['created_at', 'DESC']],
       include: [
         { model: Vendor, as: 'vendors', through: { attributes: ['email_status', 'sent_at'] } },
@@ -65,6 +72,9 @@ async function getRfp(req, res, next) {
     });
 
     if (!rfp) return res.status(404).json({ error: 'RFP not found' });
+    if (req.user.role !== 'admin' && rfp.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     res.json(rfp);
   } catch (err) {
     next(err);
@@ -76,6 +86,9 @@ async function updateRfp(req, res, next) {
   try {
     const rfp = await Rfp.findByPk(req.params.id);
     if (!rfp) return res.status(404).json({ error: 'RFP not found' });
+    if (req.user.role !== 'admin' && rfp.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     const allowed = ['title', 'structuredData', 'budget', 'currency', 'deadline', 'deliveryDays', 'status'];
     const updates = {};
@@ -95,6 +108,9 @@ async function deleteRfp(req, res, next) {
   try {
     const rfp = await Rfp.findByPk(req.params.id);
     if (!rfp) return res.status(404).json({ error: 'RFP not found' });
+    if (req.user.role !== 'admin' && rfp.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     await rfp.destroy();
     res.json({ message: 'RFP deleted' });
   } catch (err) {
@@ -107,6 +123,9 @@ async function sendRfpToVendors(req, res, next) {
   try {
     const rfp = await Rfp.findByPk(req.params.id);
     if (!rfp) return res.status(404).json({ error: 'RFP not found' });
+    if (req.user.role !== 'admin' && rfp.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     const { vendorIds } = req.body;
     if (!Array.isArray(vendorIds) || !vendorIds.length) {
@@ -159,6 +178,9 @@ async function compareRfpProposals(req, res, next) {
     });
 
     if (!rfp) return res.status(404).json({ error: 'RFP not found' });
+    if (req.user.role !== 'admin' && rfp.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     const parsedProposals = rfp.proposals || [];
     if (parsedProposals.length < 2) {

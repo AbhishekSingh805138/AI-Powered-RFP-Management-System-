@@ -4,6 +4,13 @@ const Vendor = require('./Vendor');
 const RfpVendor = require('./RfpVendor');
 const Proposal = require('./Proposal');
 const Comparison = require('./Comparison');
+const RfpDocument = require('./RfpDocument');
+const GeneratedProposal = require('./GeneratedProposal');
+const DocumentEmbedding = require('./DocumentEmbedding');
+const RiskAnalysis = require('./RiskAnalysis');
+const ChatConversation = require('./ChatConversation');
+const ChatMessage = require('./ChatMessage');
+const User = require('./User');
 
 // Associations
 
@@ -27,6 +34,30 @@ Vendor.hasMany(Proposal, { foreignKey: 'vendor_id', as: 'proposals' });
 Comparison.belongsTo(Rfp, { foreignKey: 'rfp_id', as: 'rfp' });
 Rfp.hasMany(Comparison, { foreignKey: 'rfp_id', as: 'comparisons' });
 
+// RfpDocument has many GeneratedProposals
+RfpDocument.hasMany(GeneratedProposal, { foreignKey: 'rfp_document_id', as: 'generatedProposals' });
+GeneratedProposal.belongsTo(RfpDocument, { foreignKey: 'rfp_document_id', as: 'rfpDocument' });
+
+// RiskAnalysis belongs to RfpDocument and optionally to GeneratedProposal
+RfpDocument.hasMany(RiskAnalysis, { foreignKey: 'rfp_document_id', as: 'riskAnalyses' });
+RiskAnalysis.belongsTo(RfpDocument, { foreignKey: 'rfp_document_id', as: 'rfpDocument' });
+GeneratedProposal.hasMany(RiskAnalysis, { foreignKey: 'generated_proposal_id', as: 'riskAnalyses' });
+RiskAnalysis.belongsTo(GeneratedProposal, { foreignKey: 'generated_proposal_id', as: 'generatedProposal' });
+
+// ChatConversation has many ChatMessages
+ChatConversation.hasMany(ChatMessage, { foreignKey: 'conversation_id', as: 'messages' });
+ChatMessage.belongsTo(ChatConversation, { foreignKey: 'conversation_id', as: 'conversation' });
+
+// User associations
+User.hasMany(Rfp, { foreignKey: 'user_id', as: 'rfps' });
+Rfp.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(Vendor, { foreignKey: 'user_id', as: 'vendors' });
+Vendor.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(RfpDocument, { foreignKey: 'user_id', as: 'rfpDocuments' });
+RfpDocument.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(ChatConversation, { foreignKey: 'user_id', as: 'chatConversations' });
+ChatConversation.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 module.exports = {
   sequelize,
   Rfp,
@@ -34,4 +65,11 @@ module.exports = {
   RfpVendor,
   Proposal,
   Comparison,
+  RfpDocument,
+  GeneratedProposal,
+  DocumentEmbedding,
+  RiskAnalysis,
+  ChatConversation,
+  ChatMessage,
+  User,
 };

@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { listRfps, listVendors, listProposals } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { listRfps, listVendors, listProposals, listRfpDocuments, listRiskAnalyses, listConversations } from '../services/api';
 
 function Dashboard() {
-  const [stats, setStats] = useState({ rfps: 0, vendors: 0, proposals: 0, evaluated: 0 });
+  const { user } = useAuth();
+  const isManagerOrAdmin = user?.role === 'admin' || user?.role === 'manager';
+  const [stats, setStats] = useState({ rfps: 0, vendors: 0, proposals: 0, evaluated: 0, analyzedDocs: 0, riskAnalyses: 0, chatConversations: 0 });
   const [recentRfps, setRecentRfps] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [rfpRes, vendorRes, proposalRes] = await Promise.all([
+        const [rfpRes, vendorRes, proposalRes, docRes, riskRes, chatRes] = await Promise.all([
           listRfps(),
           listVendors(),
           listProposals(),
+          listRfpDocuments().catch(() => ({ data: [] })),
+          listRiskAnalyses().catch(() => ({ data: [] })),
+          listConversations().catch(() => ({ data: [] })),
         ]);
 
         const rfps = rfpRes.data;
@@ -22,6 +28,9 @@ function Dashboard() {
           vendors: vendorRes.data.length,
           proposals: proposalRes.data.length,
           evaluated: rfps.filter((r) => r.status === 'evaluating' || r.status === 'awarded').length,
+          analyzedDocs: docRes.data.filter((d) => d.status === 'extracted').length,
+          riskAnalyses: riskRes.data.length,
+          chatConversations: chatRes.data.length,
         });
         setRecentRfps(rfps.slice(0, 5));
       } catch (err) {
@@ -39,10 +48,19 @@ function Dashboard() {
     <div>
       <div className="page-header">
         <h1>Dashboard</h1>
-        <Link to="/rfps/new" className="btn btn-primary">Create New RFP</Link>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link to="/rfp-analyzer" className="btn btn-success">Analyze RFP</Link>
+          {isManagerOrAdmin && <Link to="/risk-analyzer" className="btn btn-warning">Analyze Risk</Link>}
+          <Link to="/chatbot" className="btn btn-info">AI Chat</Link>
+          {isManagerOrAdmin && <Link to="/rfps/new" className="btn btn-primary">Create New RFP</Link>}
+        </div>
       </div>
 
-      <div className="grid-3 mb-16">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 16 }}>
+        <div className="stat-card">
+          <div className="stat-value">{stats.analyzedDocs}</div>
+          <div className="stat-label">RFPs Analyzed</div>
+        </div>
         <div className="stat-card">
           <div className="stat-value">{stats.rfps}</div>
           <div className="stat-label">Total RFPs</div>
@@ -54,6 +72,14 @@ function Dashboard() {
         <div className="stat-card">
           <div className="stat-value">{stats.proposals}</div>
           <div className="stat-label">Proposals Received</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{stats.riskAnalyses}</div>
+          <div className="stat-label">Risk Analyses</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{stats.chatConversations}</div>
+          <div className="stat-label">Chat Conversations</div>
         </div>
       </div>
 

@@ -7,12 +7,20 @@ const rateLimit = require('express-rate-limit');
 const { sequelize } = require('./models');
 const errorHandler = require('./middleware/errorHandler');
 
+const authRoutes = require('./routes/authRoutes');
+const { authenticate } = require('./middleware/auth');
 const rfpRoutes = require('./routes/rfpRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
 const proposalRoutes = require('./routes/proposalRoutes');
+const rfpDocumentRoutes = require('./routes/rfpDocumentRoutes');
+const searchRoutes = require('./routes/searchRoutes');
+const complianceRoutes = require('./routes/complianceRoutes');
+const riskRoutes = require('./routes/riskRoutes');
+const chatRoutes = require('./routes/chatRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 // Validate required environment variables
-const requiredEnvVars = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'OPENAI_API_KEY'];
+const requiredEnvVars = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'OPENAI_API_KEY', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
 const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
 if (missingVars.length > 0) {
   console.error(`Missing required environment variables: ${missingVars.join(', ')}`);
@@ -55,15 +63,32 @@ app.use('/api/rfps', (req, res, next) => {
   next();
 });
 app.use('/api/proposals/:id/parse', aiLimiter);
+app.use('/api/rfp-documents', (req, res, next) => {
+  if (req.method === 'POST' && (req.path.endsWith('/extract') || req.path.endsWith('/generate'))) {
+    return aiLimiter(req, res, next);
+  }
+  next();
+});
+app.use('/api/search', (req, res, next) => {
+  if (req.method === 'POST' && (req.path === '/' || req.path.startsWith('/index'))) {
+    return aiLimiter(req, res, next);
+  }
+  next();
+});
+app.use('/api/compliance/check', aiLimiter);
+app.use('/api/risk-analysis', (req, res, next) => {
+  if (req.method === 'POST') return aiLimiter(req, res, next);
+  next();
+});
+app.use('/api/chat/conversations', (req, res, next) => {
+  if (req.method === 'POST' && req.path.endsWith('/messages')) return aiLimiter(req, res, next);
+  next();
+});
 
 app.use(express.json({ limit: '2mb' }));
 
-// Routes
-app.use('/api/rfps', rfpRoutes);
-app.use('/api/vendors', vendorRoutes);
-app.use('/api/proposals', proposalRoutes);
-
-// Health check with DB connectivity
+// Public routes (no auth required)
+app.use('/api/auth', authRoutes);
 app.get('/api/health', async (req, res) => {
   try {
     await sequelize.authenticate();
@@ -73,6 +98,20 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Auth wall — all routes below require authentication
+app.use('/api', authenticate);
+
+// Protected routes
+app.use('/api/rfps', rfpRoutes);
+app.use('/api/vendors', vendorRoutes);
+app.use('/api/proposals', proposalRoutes);
+app.use('/api/rfp-documents', rfpDocumentRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/compliance', complianceRoutes);
+app.use('/api/risk-analysis', riskRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/admin', adminRoutes);
+
 // Error handler
 app.use(errorHandler);
 
@@ -80,15 +119,7 @@ app.use(errorHandler);
 async function start() {
   try {
     await sequelize.authenticate();
-    console.log('Database connected.');
-
-    // Only alter schema in development; in production use migrations
-    if (isProduction) {
-      await sequelize.sync();
-    } else {
-      await sequelize.sync({ alter: true });
-    }
-    console.log('Models synchronized.');
+    console.log('Database connected. Run "npm run migrate" to apply migrations.');
 
     const server = app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT} [${process.env.NODE_ENV || 'development'}]`);
