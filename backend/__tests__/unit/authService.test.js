@@ -38,6 +38,8 @@ describe('authService', () => {
     // Reset user mock state
     mockUser.status = 'active';
     mockUser.passwordHash = '$2a$10$fakehash';
+    // Clear token blacklist between tests
+    authService._clearBlacklistForTest();
   });
 
   describe('register', () => {

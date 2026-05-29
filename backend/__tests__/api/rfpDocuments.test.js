@@ -55,6 +55,13 @@ jest.mock('pdf-parse', () => {
   return jest.fn().mockResolvedValue({ text: 'Extracted PDF text content for testing.' });
 });
 
+// Mock exportService
+const mockExportService = {
+  generatePdf: jest.fn(),
+  generateDocx: jest.fn(),
+};
+jest.mock('../../src/services/exportService', () => mockExportService);
+
 // Mock email service (required by rfpController)
 jest.mock('../../src/services/emailService', () => ({
   sendRfpEmail: jest.fn(),
@@ -107,7 +114,7 @@ describe('POST /api/rfp-documents/upload', () => {
 
     const res = await request(app)
       .post('/api/rfp-documents/upload')
-      .attach('file', Buffer.from('fake pdf'), { filename: 'test.pdf', contentType: 'application/pdf' });
+      .attach('file', Buffer.from('%PDF-1.4 fake pdf content'), { filename: 'test.pdf', contentType: 'application/pdf' });
 
     expect(res.status).toBe(201);
     expect(mockModels.RfpDocument.create).toHaveBeenCalledWith(
@@ -124,7 +131,7 @@ describe('POST /api/rfp-documents/upload', () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('PDF file is required');
+    expect(res.body.error).toContain('No file uploaded');
   });
 });
 
@@ -301,7 +308,10 @@ describe('POST /api/rfp-documents/:id/generate', () => {
       .send({ companyProfile: { expertise: 'Software' } });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('Company name');
+    expect(res.body.error).toBe('Validation Error');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'companyProfile.company_name' })])
+    );
   });
 
   test('404 — returns error for non-existent document', async () => {
@@ -382,7 +392,7 @@ describe('PUT /api/rfp-documents/:docId/proposals/:id', () => {
     );
   });
 
-  test('200 — ignores invalid status values', async () => {
+  test('400 — rejects invalid status values', async () => {
     const mockProposal = createMockGeneratedProposal({ id: 10, rfpDocumentId: 5 });
     mockModels.GeneratedProposal.findOne.mockResolvedValue(mockProposal);
 
@@ -390,10 +400,8 @@ describe('PUT /api/rfp-documents/:docId/proposals/:id', () => {
       .put('/api/rfp-documents/5/proposals/10')
       .send({ status: 'invalid_status' });
 
-    expect(res.status).toBe(200);
-    // Should not include the invalid status
-    const updateCall = mockProposal.update.mock.calls[0][0];
-    expect(updateCall.status).toBeUndefined();
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Validation Error');
   });
 
   test('200 — accepts finalized status', async () => {
@@ -418,5 +426,103 @@ describe('PUT /api/rfp-documents/:docId/proposals/:id', () => {
       .send({ title: 'Update' });
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/rfp-documents/:docId/proposals/:id/export', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('200 — exports proposal as PDF by default', async () => {
+    const mockProposal = createMockGeneratedProposal({
+      id: 10,
+      rfpDocumentId: 5,
+      title: 'Test Proposal',
+      rfpDocument: createMockRfpDocument({ id: 5 }),
+    });
+    mockModels.GeneratedProposal.findOne.mockResolvedValue(mockProposal);
+    const fakePdf = Buffer.from('%PDF-1.4 fake');
+    mockExportService.generatePdf.mockResolvedValue(fakePdf);
+
+    const res = await request(app)
+      .get('/api/rfp-documents/5/proposals/10/export');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(res.headers['content-disposition']).toContain('.pdf');
+    expect(mockExportService.generatePdf).toHaveBeenCalledWith(mockProposal);
+  });
+
+  test('200 — exports proposal as PDF with explicit format', async () => {
+    const mockProposal = createMockGeneratedProposal({ id: 10, rfpDocumentId: 5 });
+    mockModels.GeneratedProposal.findOne.mockResolvedValue(mockProposal);
+    const fakePdf = Buffer.from('%PDF-1.4 fake');
+    mockExportService.generatePdf.mockResolvedValue(fakePdf);
+
+    const res = await request(app)
+      .get('/api/rfp-documents/5/proposals/10/export?format=pdf');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(mockExportService.generatePdf).toHaveBeenCalled();
+  });
+
+  test('200 — exports proposal as DOCX', async () => {
+    const mockProposal = createMockGeneratedProposal({ id: 10, rfpDocumentId: 5, title: 'DOCX Proposal' });
+    mockModels.GeneratedProposal.findOne.mockResolvedValue(mockProposal);
+    const fakeDocx = Buffer.from('PK fake docx');
+    mockExportService.generateDocx.mockResolvedValue(fakeDocx);
+
+    const res = await request(app)
+      .get('/api/rfp-documents/5/proposals/10/export?format=docx');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(res.headers['content-disposition']).toContain('.docx');
+    expect(mockExportService.generateDocx).toHaveBeenCalledWith(mockProposal);
+  });
+
+  test('400 — rejects invalid format', async () => {
+    const res = await request(app)
+      .get('/api/rfp-documents/5/proposals/10/export?format=txt');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Validation Error');
+  });
+
+  test('404 — returns error for non-existent proposal', async () => {
+    mockModels.GeneratedProposal.findOne.mockResolvedValue(null);
+
+    const res = await request(app)
+      .get('/api/rfp-documents/5/proposals/999/export');
+
+    expect(res.status).toBe(404);
+  });
+
+  test('400 — rejects proposal with no content', async () => {
+    const mockProposal = createMockGeneratedProposal({ id: 10, rfpDocumentId: 5 });
+    mockProposal.proposalContent = null;
+    mockModels.GeneratedProposal.findOne.mockResolvedValue(mockProposal);
+
+    const res = await request(app)
+      .get('/api/rfp-documents/5/proposals/10/export');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('no content');
+  });
+
+  test('sets correct filename from proposal title', async () => {
+    const mockProposal = createMockGeneratedProposal({
+      id: 10,
+      rfpDocumentId: 5,
+      title: 'My Great Proposal',
+      version: 3,
+    });
+    mockModels.GeneratedProposal.findOne.mockResolvedValue(mockProposal);
+    mockExportService.generatePdf.mockResolvedValue(Buffer.from('%PDF-1.4'));
+
+    const res = await request(app)
+      .get('/api/rfp-documents/5/proposals/10/export');
+
+    expect(res.headers['content-disposition']).toContain('My Great Proposal_v3.pdf');
   });
 });

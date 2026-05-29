@@ -1,5 +1,6 @@
 const { RfpDocument, GeneratedProposal, RiskAnalysis } = require('../models');
 const riskService = require('../services/riskService');
+const jobQueue = require('../services/jobQueue');
 
 // POST /api/risk-analysis — Run risk analysis on an RFP document
 async function analyzeRisks(req, res, next) {
@@ -29,6 +30,18 @@ async function analyzeRisks(req, res, next) {
       status: 'analyzing',
     });
 
+    // Try async job queue first
+    const jobId = await jobQueue.enqueue(jobQueue.JOBS.ANALYZE_RISKS, {
+      riskAnalysisId: riskAnalysis.id,
+      rfpDocumentId,
+      generatedProposalId: generatedProposalId || null,
+    });
+
+    if (jobId) {
+      return res.status(202).json({ jobId, riskAnalysisId: riskAnalysis.id, status: 'analyzing', message: 'Risk analysis queued' });
+    }
+
+    // Fallback: synchronous processing
     const result = await riskService.analyzeRisks(rfpDoc, genProposal);
 
     await riskAnalysis.update({

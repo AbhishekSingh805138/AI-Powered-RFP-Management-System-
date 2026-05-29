@@ -43,6 +43,12 @@ const Rfp = sequelize.define('Rfp', {
     type: DataTypes.ENUM('draft', 'published', 'sent', 'evaluating', 'awarded', 'closed'),
     defaultValue: 'draft',
   },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'user_id',
+    references: { model: 'users', key: 'id' },
+  },
 }, {
   tableName: 'rfps',
   underscored: true,

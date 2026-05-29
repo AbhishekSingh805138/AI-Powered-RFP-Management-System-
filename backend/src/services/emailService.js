@@ -2,6 +2,7 @@ const nodemailer = require('nodemailer');
 const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 const pdf = require('pdf-parse');
+const logger = require('../utils/logger');
 
 // SMTP transporter for sending emails
 function createTransporter() {
@@ -14,6 +15,21 @@ function createTransporter() {
       pass: process.env.SMTP_PASSWORD,
     },
   });
+}
+
+/**
+ * Send a generic email with HTML and text content.
+ */
+async function sendEmail(to, subject, html, text) {
+  const transporter = createTransporter();
+  const info = await transporter.sendMail({
+    from: process.env.SMTP_FROM,
+    to,
+    subject,
+    html,
+    text,
+  });
+  return { messageId: info.messageId, accepted: info.accepted };
 }
 
 /**
@@ -80,7 +96,7 @@ async function fetchInboundEmails() {
       host: process.env.IMAP_HOST,
       port: parseInt(process.env.IMAP_PORT, 10),
       tls: true,
-      tlsOptions: { rejectUnauthorized: false },
+      tlsOptions: { rejectUnauthorized: process.env.NODE_ENV === 'production' },
     });
 
     imap.once('ready', () => {
@@ -141,7 +157,7 @@ async function fetchInboundEmails() {
 
                 emails.push(emailData);
               } catch (parseErr) {
-                console.error('Email parse error:', parseErr.message);
+                logger.error('Email parse error', { error: parseErr.message });
               }
             });
           });
@@ -172,6 +188,7 @@ async function extractPdfText(pdfBuffer) {
 }
 
 module.exports = {
+  sendEmail,
   sendRfpEmail,
   fetchInboundEmails,
   extractPdfText,

@@ -101,7 +101,10 @@ describe('POST /api/vendors', () => {
       .send({ email: 'test@test.com' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('name and email are required');
+    expect(res.body.error).toBe('Validation Error');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'name' })])
+    );
   });
 
   test('400 — rejects missing email', async () => {

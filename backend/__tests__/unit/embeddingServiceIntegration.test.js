@@ -47,14 +47,14 @@ describe('embeddingService — async functions', () => {
       expect(mockCreate).toHaveBeenCalledWith({
         model: 'text-embedding-3-small',
         input: 'test text',
-      });
+      }, { timeout: 60000 });
       expect(result).toEqual(mockVector);
       expect(result).toHaveLength(1536);
     });
 
     test('propagates OpenAI API errors', async () => {
       mockCreate.mockRejectedValue(new Error('API rate limit exceeded'));
-      await expect(generateEmbedding('test')).rejects.toThrow('API rate limit exceeded');
+      await expect(generateEmbedding('test')).rejects.toThrow('Embedding request failed');
     });
   });
 
@@ -74,7 +74,7 @@ describe('embeddingService — async functions', () => {
       expect(mockCreate).toHaveBeenCalledWith({
         model: 'text-embedding-3-small',
         input: ['text 1', 'text 2'],
-      });
+      }, { timeout: 60000 });
       expect(result).toHaveLength(2);
     });
   });

@@ -85,7 +85,10 @@ describe('Risk Analysis API — /api/risk-analysis', () => {
     test('returns 400 if rfpDocumentId is missing', async () => {
       const res = await request(app).post('/api/risk-analysis').send({});
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('rfpDocumentId');
+      expect(res.body.error).toBe('Validation Error');
+      expect(res.body.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'rfpDocumentId' })])
+      );
     });
 
     test('returns 404 if RFP document not found', async () => {

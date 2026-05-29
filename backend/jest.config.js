@@ -2,6 +2,9 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['<rootDir>/__tests__/**/*.test.js'],
   setupFiles: ['<rootDir>/__tests__/setup.js'],
+  moduleNameMapper: {
+    'pg-boss': '<rootDir>/__tests__/helpers/pgBossMock.js',
+  },
   collectCoverageFrom: [
     'src/**/*.js',
     '!src/server.js',

@@ -1,7 +1,80 @@
 const OpenAI = require('openai');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = 'gpt-4o-mini';
+const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+const AI_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS, 10) || 60000;
+const MAX_INPUT_LENGTH = parseInt(process.env.AI_MAX_INPUT_LENGTH, 10) || 100000;
+
+/**
+ * Wrapper for OpenAI chat completion with timeout and error handling.
+ */
+async function createChatCompletion(params, context) {
+  try {
+    const response = await openai.chat.completions.create(params, {
+      timeout: AI_TIMEOUT,
+    });
+
+    if (!response.choices || response.choices.length === 0) {
+      const err = new Error(`AI returned no choices during ${context}`);
+      err.status = 502;
+      throw err;
+    }
+
+    return response.choices[0].message.content;
+  } catch (err) {
+    if (err.status === 502) throw err;
+
+    if (err.code === 'ETIMEDOUT' || err.type === 'request-timeout' || err.message?.includes('timeout')) {
+      const timeoutErr = new Error(`AI request timed out during ${context} (limit: ${AI_TIMEOUT}ms)`);
+      timeoutErr.status = 504;
+      throw timeoutErr;
+    }
+
+    if (err.status === 429) {
+      const rateLimitErr = new Error('AI rate limit exceeded. Please try again later.');
+      rateLimitErr.status = 429;
+      throw rateLimitErr;
+    }
+
+    if (err.status >= 500) {
+      const upstreamErr = new Error(`AI service unavailable during ${context}`);
+      upstreamErr.status = 502;
+      throw upstreamErr;
+    }
+
+    const wrappedErr = new Error(`AI request failed during ${context}: ${err.message}`);
+    wrappedErr.status = err.status || 500;
+    throw wrappedErr;
+  }
+}
+
+/**
+ * Safely parse JSON from OpenAI response with fallback error.
+ */
+function safeParseJSON(content, context) {
+  if (!content) {
+    const err = new Error(`AI returned empty response during ${context}`);
+    err.status = 502;
+    throw err;
+  }
+  try {
+    return JSON.parse(content);
+  } catch (parseErr) {
+    const err = new Error(`AI returned invalid JSON during ${context}: ${parseErr.message}`);
+    err.status = 502;
+    throw err;
+  }
+}
+
+/**
+ * Truncate input text to stay within token-safe limits.
+ */
+function truncateInput(text, maxLength = MAX_INPUT_LENGTH) {
+  if (!text) return '';
+  if (typeof text !== 'string') text = JSON.stringify(text, null, 2);
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + '\n\n[...truncated due to length]';
+}
 
 /**
  * Analyze risks in an RFP document, optionally comparing against a generated proposal.
@@ -10,16 +83,18 @@ const MODEL = 'gpt-4o-mini';
 async function analyzeRisks(rfpDocument, generatedProposal = null) {
   const rfpContext = rfpDocument.extractedData || {};
   const proposalContext = generatedProposal
-    ? (typeof generatedProposal.proposalContent === 'string'
-      ? generatedProposal.proposalContent
-      : JSON.stringify(generatedProposal.proposalContent, null, 2))
+    ? truncateInput(
+        typeof generatedProposal.proposalContent === 'string'
+          ? generatedProposal.proposalContent
+          : JSON.stringify(generatedProposal.proposalContent, null, 2)
+      )
     : null;
 
   const proposalSection = proposalContext
     ? `\n\nPROPOSAL CONTENT:\n${proposalContext}`
     : '\n\nNo proposal provided — analyze inherent risks in the RFP requirements themselves.';
 
-  const response = await openai.chat.completions.create({
+  const content = await createChatCompletion({
     model: MODEL,
     temperature: 0.1,
     response_format: { type: 'json_object' },
@@ -29,7 +104,7 @@ async function analyzeRisks(rfpDocument, generatedProposal = null) {
         content: `You are a senior risk analyst specializing in RFP/proposal risk assessment. Analyze the RFP requirements${proposalContext ? ' against the proposal' : ''} and produce a comprehensive risk assessment across multiple categories.
 
 RFP REQUIREMENTS:
-${JSON.stringify(rfpContext, null, 2)}${proposalSection}
+${truncateInput(rfpContext)}${proposalSection}
 
 Return a JSON object with this exact structure:
 {
@@ -86,9 +161,9 @@ Analyze ALL six categories (technical, financial, compliance, timeline, resource
         content: 'Perform a comprehensive risk analysis across all categories.',
       },
     ],
-  });
+  }, 'risk analysis');
 
-  return JSON.parse(response.choices[0].message.content);
+  return safeParseJSON(content, 'risk analysis');
 }
 
 /**
@@ -104,7 +179,7 @@ async function compareRiskProfiles(analyses) {
     analysisData: a.analysisData,
   }));
 
-  const response = await openai.chat.completions.create({
+  const content = await createChatCompletion({
     model: MODEL,
     temperature: 0.2,
     response_format: { type: 'json_object' },
@@ -114,7 +189,7 @@ async function compareRiskProfiles(analyses) {
         content: `You are a senior risk analyst. Compare the following risk profiles and identify patterns, common risks, and divergences.
 
 RISK PROFILES:
-${JSON.stringify(profiles, null, 2)}
+${truncateInput(profiles)}
 
 Return a JSON object with this structure:
 {
@@ -150,9 +225,9 @@ Return a JSON object with this structure:
         content: 'Compare these risk profiles and identify patterns.',
       },
     ],
-  });
+  }, 'risk profile comparison');
 
-  return JSON.parse(response.choices[0].message.content);
+  return safeParseJSON(content, 'risk profile comparison');
 }
 
 module.exports = {

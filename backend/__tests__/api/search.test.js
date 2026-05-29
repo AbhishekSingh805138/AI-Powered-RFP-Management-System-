@@ -121,7 +121,10 @@ describe('POST /api/search', () => {
       .send({ query: '' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('query is required');
+    expect(res.body.error).toBe('Validation Error');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'query' })])
+    );
   });
 
   test('400 — rejects missing query', async () => {

@@ -1,10 +1,32 @@
+const multer = require('multer');
+const logger = require('../utils/logger');
+
 function errorHandler(err, req, res, next) {
   const isProduction = process.env.NODE_ENV === 'production';
 
   // Always log server-side
-  console.error('Error:', err.message);
-  if (!isProduction) {
-    console.error(err.stack);
+  logger.error(err.message, {
+    status: err.status,
+    method: req.method,
+    url: req.originalUrl,
+    requestId: req.id,
+    userId: req.user?.id,
+    ...(isProduction ? {} : { stack: err.stack }),
+  });
+
+  // Multer file upload errors
+  if (err instanceof multer.MulterError) {
+    const messages = {
+      LIMIT_FILE_SIZE: 'File exceeds maximum allowed size',
+      LIMIT_UNEXPECTED_FILE: 'Unexpected file field',
+      LIMIT_FILE_COUNT: 'Too many files',
+      LIMIT_FIELD_KEY: 'Field name too long',
+      LIMIT_FIELD_VALUE: 'Field value too long',
+      LIMIT_FIELD_COUNT: 'Too many fields',
+      LIMIT_PART_COUNT: 'Too many parts',
+    };
+    const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    return res.status(status).json({ error: messages[err.code] || err.message });
   }
 
   if (err.name === 'SequelizeValidationError') {

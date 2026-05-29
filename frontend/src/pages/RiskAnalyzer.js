@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { listRfpDocuments, listGeneratedProposals, analyzeRisks, listRiskAnalyses, getRiskAnalysis, compareRiskProfiles, deleteRiskAnalysis } from '../services/api';
+import { useJobPoller } from '../hooks/useJobPoller';
 
 function RiskAnalyzer() {
   const [rfpDocuments, setRfpDocuments] = useState([]);
@@ -12,6 +13,7 @@ function RiskAnalyzer() {
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
   const [view, setView] = useState('form'); // 'form' | 'report' | 'history'
+  const { pollJob } = useJobPoller();
 
   useEffect(() => {
     loadData();
@@ -66,12 +68,32 @@ function RiskAnalyzer() {
       }
 
       const res = await analyzeRisks(data);
-      setReport(res.data);
-      setView('report');
-      loadData(); // refresh history
+
+      if (res.status === 202 && res.data.jobId) {
+        // Async job — poll until done
+        const riskId = res.data.riskAnalysisId;
+        pollJob(
+          res.data.jobId,
+          async () => {
+            const analysisRes = await getRiskAnalysis(riskId);
+            setReport(analysisRes.data);
+            setView('report');
+            setAnalyzing(false);
+            loadData();
+          },
+          (errMsg) => {
+            setError(`Risk analysis failed: ${errMsg}`);
+            setAnalyzing(false);
+          }
+        );
+      } else {
+        setReport(res.data);
+        setView('report');
+        setAnalyzing(false);
+        loadData();
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Risk analysis failed');
-    } finally {
       setAnalyzing(false);
     }
   };

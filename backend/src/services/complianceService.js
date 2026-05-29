@@ -1,14 +1,92 @@
 const OpenAI = require('openai');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = 'gpt-4o-mini';
+const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+const AI_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS, 10) || 60000;
+const MAX_INPUT_LENGTH = parseInt(process.env.AI_MAX_INPUT_LENGTH, 10) || 100000;
+
+/**
+ * Wrapper for OpenAI chat completion with timeout and error handling.
+ */
+async function createChatCompletion(params, context) {
+  try {
+    const response = await openai.chat.completions.create(params, {
+      timeout: AI_TIMEOUT,
+    });
+
+    if (!response.choices || response.choices.length === 0) {
+      const err = new Error(`AI returned no choices during ${context}`);
+      err.status = 502;
+      throw err;
+    }
+
+    return response.choices[0].message.content;
+  } catch (err) {
+    if (err.status === 502) throw err;
+
+    if (err.code === 'ETIMEDOUT' || err.type === 'request-timeout' || err.message?.includes('timeout')) {
+      const timeoutErr = new Error(`AI request timed out during ${context} (limit: ${AI_TIMEOUT}ms)`);
+      timeoutErr.status = 504;
+      throw timeoutErr;
+    }
+
+    if (err.status === 429) {
+      const rateLimitErr = new Error('AI rate limit exceeded. Please try again later.');
+      rateLimitErr.status = 429;
+      throw rateLimitErr;
+    }
+
+    if (err.status >= 500) {
+      const upstreamErr = new Error(`AI service unavailable during ${context}`);
+      upstreamErr.status = 502;
+      throw upstreamErr;
+    }
+
+    const wrappedErr = new Error(`AI request failed during ${context}: ${err.message}`);
+    wrappedErr.status = err.status || 500;
+    throw wrappedErr;
+  }
+}
+
+/**
+ * Safely parse JSON from OpenAI response with fallback error.
+ */
+function safeParseJSON(content, context) {
+  if (!content) {
+    const err = new Error(`AI returned empty response during ${context}`);
+    err.status = 502;
+    throw err;
+  }
+  try {
+    return JSON.parse(content);
+  } catch (parseErr) {
+    const err = new Error(`AI returned invalid JSON during ${context}: ${parseErr.message}`);
+    err.status = 502;
+    throw err;
+  }
+}
+
+/**
+ * Truncate input text to stay within token-safe limits.
+ */
+function truncateInput(text, maxLength = MAX_INPUT_LENGTH) {
+  if (!text) return '';
+  if (typeof text !== 'string') text = JSON.stringify(text, null, 2);
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + '\n\n[...truncated due to length]';
+}
 
 /**
  * AI Compliance Check: Compare RFP requirements against proposal content.
  * Returns detailed gap analysis.
  */
 async function checkCompliance(rfpRequirements, proposalContent) {
-  const response = await openai.chat.completions.create({
+  const rfpInput = truncateInput(JSON.stringify(rfpRequirements, null, 2));
+  const proposalInput = truncateInput(
+    typeof proposalContent === 'string' ? proposalContent : JSON.stringify(proposalContent, null, 2)
+  );
+
+  const content = await createChatCompletion({
     model: MODEL,
     temperature: 0.1,
     response_format: { type: 'json_object' },
@@ -18,10 +96,10 @@ async function checkCompliance(rfpRequirements, proposalContent) {
         content: `You are a senior compliance analyst. Compare the RFP requirements against the proposal content and produce a detailed compliance gap analysis.
 
 RFP REQUIREMENTS:
-${JSON.stringify(rfpRequirements, null, 2)}
+${rfpInput}
 
 PROPOSAL CONTENT:
-${typeof proposalContent === 'string' ? proposalContent : JSON.stringify(proposalContent, null, 2)}
+${proposalInput}
 
 Analyze every requirement and deliverable from the RFP. For each one, determine if the proposal adequately addresses it.
 
@@ -103,9 +181,9 @@ Be thorough and objective. Flag every gap, no matter how small. Severity levels:
         content: 'Perform a comprehensive compliance analysis of this proposal against the RFP requirements.',
       },
     ],
-  });
+  }, 'compliance check');
 
-  return JSON.parse(response.choices[0].message.content);
+  return safeParseJSON(content, 'compliance check');
 }
 
 module.exports = {

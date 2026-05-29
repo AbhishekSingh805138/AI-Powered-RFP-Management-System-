@@ -26,6 +26,12 @@ const ChatConversation = sequelize.define('ChatConversation', {
     allowNull: true,
     field: 'last_message_at',
   },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'user_id',
+    references: { model: 'users', key: 'id' },
+  },
 }, {
   tableName: 'chat_conversations',
   underscored: true,

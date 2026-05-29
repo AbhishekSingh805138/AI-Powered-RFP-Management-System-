@@ -75,13 +75,16 @@ describe('Auth API — /api/auth', () => {
         email: 'a@b.com', password: '123', firstName: 'A', lastName: 'B',
       });
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('8 characters');
+      expect(res.body.error).toBe('Validation Error');
+      expect(res.body.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'password' })])
+      );
     });
 
     test('returns 409 if email is already registered', async () => {
       mockModels.User.findOne.mockResolvedValue({ id: 1, email: 'dup@test.com' });
       const res = await request(app).post('/api/auth/register').send({
-        email: 'dup@test.com', password: 'password123', firstName: 'A', lastName: 'B',
+        email: 'dup@test.com', password: 'Password123', firstName: 'A', lastName: 'B',
       });
       expect(res.status).toBe(409);
     });
@@ -93,7 +96,7 @@ describe('Auth API — /api/auth', () => {
       });
 
       const res = await request(app).post('/api/auth/register').send({
-        email: 'new@test.com', password: 'password123', firstName: 'New', lastName: 'User',
+        email: 'new@test.com', password: 'Password123', firstName: 'New', lastName: 'User',
       });
       expect(res.status).toBe(201);
       expect(res.body.accessToken).toBeDefined();
@@ -111,7 +114,7 @@ describe('Auth API — /api/auth', () => {
     test('returns 401 if user not found', async () => {
       mockModels.User.findOne.mockResolvedValue(null);
       const res = await request(app).post('/api/auth/login').send({
-        email: 'nobody@test.com', password: 'password123',
+        email: 'nobody@test.com', password: 'Password123',
       });
       expect(res.status).toBe(401);
     });
@@ -139,7 +142,7 @@ describe('Auth API — /api/auth', () => {
     });
 
     test('logs in and returns tokens', async () => {
-      const hash = await bcrypt.hash('mypassword', 10);
+      const hash = await bcrypt.hash('MyPassword1', 10);
       mockModels.User.findOne.mockResolvedValue({
         id: 1, email: 'test@test.com', firstName: 'Test', lastName: 'User',
         passwordHash: hash, role: 'admin', status: 'active',
@@ -147,7 +150,7 @@ describe('Auth API — /api/auth', () => {
       });
 
       const res = await request(app).post('/api/auth/login').send({
-        email: 'test@test.com', password: 'mypassword',
+        email: 'test@test.com', password: 'MyPassword1',
       });
       expect(res.status).toBe(200);
       expect(res.body.accessToken).toBeDefined();
@@ -221,7 +224,7 @@ describe('Auth API — /api/auth', () => {
 
       const res = await request(app).put('/api/auth/change-password')
         .set('Authorization', `Bearer ${token}`)
-        .send({ currentPassword: 'oldpass', newPassword: 'newpassword123' });
+        .send({ currentPassword: 'oldpass', newPassword: 'NewPassword123' });
       expect(res.status).toBe(200);
       expect(res.body.message).toContain('changed');
     });

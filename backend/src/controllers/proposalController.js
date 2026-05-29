@@ -1,6 +1,9 @@
-const { Proposal, Rfp, Vendor } = require('../models');
+const { Proposal, Rfp, Vendor, User } = require('../models');
 const aiService = require('../services/aiService');
 const emailService = require('../services/emailService');
+const notificationService = require('../services/notificationService');
+const emailTemplates = require('../services/emailTemplates');
+const logger = require('../utils/logger');
 const multer = require('multer');
 const pdf = require('pdf-parse');
 
@@ -202,6 +205,35 @@ async function fetchAndProcessEmails(req, res, next) {
         })),
         status: 'received',
       });
+
+      // Notify RFP owner about the new proposal
+      if (rfp.userId) {
+        const owner = await User.findByPk(rfp.userId);
+        if (owner?.email) {
+          const appUrl = process.env.APP_URL || null;
+          const template = emailTemplates.proposalReceived({
+            userName: owner.firstName || owner.email,
+            vendorName: vendor.name,
+            vendorCompany: vendor.company,
+            rfpTitle: rfp.title,
+            rfpId: rfp.id,
+            proposalId: proposal.id,
+            appUrl,
+          });
+
+          notificationService.sendNotification({
+            type: 'proposal-received',
+            recipientEmail: owner.email,
+            recipientType: 'user',
+            recipientId: owner.id,
+            entityType: 'proposal',
+            entityId: proposal.id,
+            subject: template.subject,
+            html: template.html,
+            text: template.text,
+          }).catch((err) => logger.error('Proposal-received notification failed', { error: err.message, proposalId: proposal.id }));
+        }
+      }
 
       results.push({
         from: email.from,

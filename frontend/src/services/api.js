@@ -4,9 +4,20 @@ const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
 });
 
+// Safe localStorage helpers — never throw
+function getToken(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function setToken(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* private browsing / quota */ }
+}
+function removeToken(key) {
+  try { localStorage.removeItem(key); } catch { /* ignored */ }
+}
+
 // Attach access token to every request
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
+  const token = getToken('accessToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -40,9 +51,9 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const refreshToken = localStorage.getItem('refreshToken');
+      const refreshToken = getToken('refreshToken');
       if (!refreshToken) {
-        localStorage.removeItem('accessToken');
+        removeToken('accessToken');
         window.location.href = '/login';
         return Promise.reject(error);
       }
@@ -50,17 +61,18 @@ api.interceptors.response.use(
       try {
         const res = await axios.post(
           `${api.defaults.baseURL}/auth/refresh`,
-          { refreshToken }
+          { refreshToken },
+          { timeout: 10000 }
         );
         const { accessToken } = res.data;
-        localStorage.setItem('accessToken', accessToken);
+        setToken('accessToken', accessToken);
         processQueue(null, accessToken);
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        removeToken('accessToken');
+        removeToken('refreshToken');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       } finally {
@@ -118,6 +130,10 @@ export const generateProposalFromRfp = (docId, companyProfile) => api.post(`/rfp
 export const listGeneratedProposals = (docId) => api.get(`/rfp-documents/${docId}/proposals`);
 export const getGeneratedProposal = (docId, id) => api.get(`/rfp-documents/${docId}/proposals/${id}`);
 export const updateGeneratedProposal = (docId, id, data) => api.put(`/rfp-documents/${docId}/proposals/${id}`, data);
+export const exportProposal = (docId, id, format = 'pdf') => api.get(`/rfp-documents/${docId}/proposals/${id}/export`, {
+  params: { format },
+  responseType: 'blob',
+});
 
 // Semantic Search (RAG)
 export const semanticSearch = (query, options = {}) => api.post('/search', { query, ...options });
@@ -143,6 +159,16 @@ export const sendChatMessage = (conversationId, content, options) => api.post(`/
 export const archiveConversation = (id) => api.put(`/chat/conversations/${id}/archive`);
 export const deleteConversation = (id) => api.delete(`/chat/conversations/${id}`);
 export const getSuggestedQuestions = (conversationId) => api.get(`/chat/conversations/${conversationId}/suggestions`);
+
+// Jobs
+export const getJobStatus = (jobId) => api.get(`/jobs/${jobId}`);
+
+// Analytics
+export const getAnalytics = () => api.get('/analytics');
+
+// Notifications
+export const listNotifications = (params) => api.get('/notifications', { params });
+export const getNotificationStats = () => api.get('/notifications/stats');
 
 // Admin
 export const listUsers = (params) => api.get('/admin/users', { params });

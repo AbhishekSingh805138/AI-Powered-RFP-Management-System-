@@ -1,40 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { listRfps, listVendors, listProposals, listRfpDocuments, listRiskAnalyses, listConversations } from '../services/api';
+import { getAnalytics } from '../services/api';
+import {
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar,
+} from 'recharts';
+
+const STATUS_COLORS = {
+  draft: '#94a3b8',
+  published: '#60a5fa',
+  sent: '#818cf8',
+  evaluating: '#fbbf24',
+  awarded: '#34d399',
+  closed: '#f87171',
+};
+
+const RISK_COLORS = {
+  low: '#34d399',
+  medium: '#fbbf24',
+  high: '#fb923c',
+  critical: '#f87171',
+};
+
+const AREA_COLORS = {
+  rfps: '#4361ee',
+  documents: '#2ec4b6',
+  proposals: '#818cf8',
+  risks: '#fb923c',
+};
 
 function Dashboard() {
   const { user } = useAuth();
   const isManagerOrAdmin = user?.role === 'admin' || user?.role === 'manager';
-  const [stats, setStats] = useState({ rfps: 0, vendors: 0, proposals: 0, evaluated: 0, analyzedDocs: 0, riskAnalyses: 0, chatConversations: 0 });
-  const [recentRfps, setRecentRfps] = useState([]);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [rfpRes, vendorRes, proposalRes, docRes, riskRes, chatRes] = await Promise.all([
-          listRfps(),
-          listVendors(),
-          listProposals(),
-          listRfpDocuments().catch(() => ({ data: [] })),
-          listRiskAnalyses().catch(() => ({ data: [] })),
-          listConversations().catch(() => ({ data: [] })),
-        ]);
-
-        const rfps = rfpRes.data;
-        setStats({
-          rfps: rfps.length,
-          vendors: vendorRes.data.length,
-          proposals: proposalRes.data.length,
-          evaluated: rfps.filter((r) => r.status === 'evaluating' || r.status === 'awarded').length,
-          analyzedDocs: docRes.data.filter((d) => d.status === 'extracted').length,
-          riskAnalyses: riskRes.data.length,
-          chatConversations: chatRes.data.length,
-        });
-        setRecentRfps(rfps.slice(0, 5));
-      } catch (err) {
-        // silently handled — error state could be added if needed
+        const res = await getAnalytics();
+        setData(res.data);
+      } catch {
+        // Fall back to empty state
       } finally {
         setLoading(false);
       }
@@ -43,6 +52,9 @@ function Dashboard() {
   }, []);
 
   if (loading) return <div className="loading">Loading dashboard...</div>;
+
+  const summary = data?.summary || {};
+  const charts = data?.charts || {};
 
   return (
     <div>
@@ -56,64 +68,189 @@ function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 16 }}>
+      {/* Summary Stats */}
+      <div className="dashboard-stats-grid">
         <div className="stat-card">
-          <div className="stat-value">{stats.analyzedDocs}</div>
+          <div className="stat-value">{summary.analyzedDocuments || 0}</div>
           <div className="stat-label">RFPs Analyzed</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.rfps}</div>
+          <div className="stat-value">{summary.totalRfps || 0}</div>
           <div className="stat-label">Total RFPs</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.vendors}</div>
+          <div className="stat-value">{summary.totalVendors || 0}</div>
           <div className="stat-label">Vendors</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.proposals}</div>
+          <div className="stat-value">{summary.totalProposals || 0}</div>
           <div className="stat-label">Proposals Received</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.riskAnalyses}</div>
+          <div className="stat-value">{summary.riskAnalyses || 0}</div>
           <div className="stat-label">Risk Analyses</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.chatConversations}</div>
-          <div className="stat-label">Chat Conversations</div>
+          <div className="stat-value">{summary.avgProposalScore || 0}</div>
+          <div className="stat-label">Avg. Proposal Score</div>
         </div>
       </div>
 
-      <div className="card">
-        <h2>Recent RFPs</h2>
-        {recentRfps.length === 0 ? (
-          <p>No RFPs yet. <Link to="/rfps/new">Create your first RFP</Link></p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Budget</th>
-                <th>Status</th>
-                <th>Proposals</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentRfps.map((rfp) => (
-                <tr key={rfp.id}>
-                  <td><Link to={`/rfps/${rfp.id}`}>RFP-{String(rfp.id).padStart(4, '0')}</Link></td>
-                  <td>{rfp.title}</td>
-                  <td>{rfp.budget ? `$${Number(rfp.budget).toLocaleString()}` : '—'}</td>
-                  <td><span className={`badge badge-${rfp.status}`}>{rfp.status}</span></td>
-                  <td>{rfp.proposals?.length || 0}</td>
-                  <td>{new Date(rfp.createdAt).toLocaleDateString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {/* Budget highlight */}
+      {summary.totalBudget > 0 && (
+        <div className="dashboard-budget-bar">
+          <div className="budget-item">
+            <span className="budget-label">Total Budget</span>
+            <span className="budget-value">${summary.totalBudget.toLocaleString()}</span>
+          </div>
+          <div className="budget-item">
+            <span className="budget-label">Avg. Budget per RFP</span>
+            <span className="budget-value">${summary.avgBudget.toLocaleString()}</span>
+          </div>
+          <div className="budget-item">
+            <span className="budget-label">Chat Conversations</span>
+            <span className="budget-value">{summary.chatConversations || 0}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Charts Row */}
+      <div className="dashboard-charts-grid">
+        {/* RFP Status Breakdown */}
+        <div className="card dashboard-chart-card">
+          <h3>RFP Status Breakdown</h3>
+          {charts.rfpStatusBreakdown?.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={charts.rfpStatusBreakdown}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={90}
+                  paddingAngle={3}
+                  dataKey="value"
+                  nameKey="name"
+                  label={({ name, value }) => `${name} (${value})`}
+                >
+                  {charts.rfpStatusBreakdown.map((entry) => (
+                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || '#94a3b8'} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="chart-empty">No RFPs yet</div>
+          )}
+        </div>
+
+        {/* Risk Level Distribution */}
+        <div className="card dashboard-chart-card">
+          <h3>Risk Level Distribution</h3>
+          {charts.riskLevelDistribution?.some((r) => r.value > 0) ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={charts.riskLevelDistribution} layout="vertical" margin={{ left: 10, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" allowDecimals={false} />
+                <YAxis dataKey="name" type="category" width={60} tick={{ fontSize: 12, textTransform: 'capitalize' }} />
+                <Tooltip />
+                <Bar dataKey="value" name="Count" radius={[0, 4, 4, 0]} barSize={28}>
+                  {charts.riskLevelDistribution.map((entry) => (
+                    <Cell key={entry.name} fill={RISK_COLORS[entry.name] || '#94a3b8'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="chart-empty">No risk analyses yet</div>
+          )}
+        </div>
       </div>
+
+      {/* Activity Timeline */}
+      {charts.activityTimeline?.length > 0 && (
+        <div className="card dashboard-chart-card" style={{ marginBottom: 20 }}>
+          <h3>Activity — Last 30 Days</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={charts.activityTimeline} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+              <defs>
+                {Object.entries(AREA_COLORS).map(([key, color]) => (
+                  <linearGradient key={key} id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={color} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11 }}
+                tickFormatter={(d) => {
+                  const dt = new Date(d + 'T00:00:00');
+                  return `${dt.getMonth() + 1}/${dt.getDate()}`;
+                }}
+                interval={4}
+              />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+              <Tooltip
+                labelFormatter={(d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              />
+              <Legend />
+              <Area type="monotone" dataKey="rfps" name="RFPs" stroke={AREA_COLORS.rfps} fillOpacity={1} fill={`url(#grad-rfps)`} />
+              <Area type="monotone" dataKey="documents" name="Documents" stroke={AREA_COLORS.documents} fillOpacity={1} fill={`url(#grad-documents)`} />
+              <Area type="monotone" dataKey="proposals" name="Proposals" stroke={AREA_COLORS.proposals} fillOpacity={1} fill={`url(#grad-proposals)`} />
+              <Area type="monotone" dataKey="risks" name="Risk Analyses" stroke={AREA_COLORS.risks} fillOpacity={1} fill={`url(#grad-risks)`} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Proposal Sources */}
+      {charts.proposalSources?.length > 0 && (
+        <div className="dashboard-charts-grid" style={{ marginBottom: 20 }}>
+          <div className="card dashboard-chart-card">
+            <h3>Proposal Sources</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={charts.proposalSources}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  dataKey="value"
+                  nameKey="name"
+                  label={({ name, value }) => `${name} (${value})`}
+                >
+                  {charts.proposalSources.map((entry, i) => (
+                    <Cell key={entry.name} fill={['#4361ee', '#2ec4b6', '#818cf8', '#fbbf24'][i % 4]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="card dashboard-chart-card">
+            <h3>Document Analysis Status</h3>
+            {charts.documentStatus?.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={charts.documentStatus} margin={{ left: 10, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Count" fill="#4361ee" radius={[4, 4, 0, 0]} barSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="chart-empty">No documents uploaded yet</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

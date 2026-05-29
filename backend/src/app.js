@@ -20,6 +20,9 @@ const complianceRoutes = require('./routes/complianceRoutes');
 const riskRoutes = require('./routes/riskRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
+const jobRoutes = require('./routes/jobRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 function createApp() {
   const app = express();
@@ -107,6 +110,9 @@ function createApp() {
   app.use('/api/risk-analysis', riskRoutes);
   app.use('/api/chat', chatRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/analytics', analyticsRoutes);
+  app.use('/api/jobs', jobRoutes);
+  app.use('/api/notifications', notificationRoutes);
 
   // Error handler
   app.use(errorHandler);

@@ -1,5 +1,7 @@
 const { RfpDocument, GeneratedProposal } = require('../models');
 const aiService = require('../services/aiService');
+const exportService = require('../services/exportService');
+const jobQueue = require('../services/jobQueue');
 const pdf = require('pdf-parse');
 
 // POST /api/rfp-documents/upload — Upload an RFP PDF for analysis
@@ -44,6 +46,16 @@ async function extractRequirements(req, res, next) {
 
     await document.update({ status: 'extracting' });
 
+    // Try async job queue first
+    const jobId = await jobQueue.enqueue(jobQueue.JOBS.EXTRACT_REQUIREMENTS, {
+      documentId: document.id,
+    });
+
+    if (jobId) {
+      return res.status(202).json({ jobId, documentId: document.id, status: 'extracting', message: 'Extraction queued' });
+    }
+
+    // Fallback: synchronous processing
     const extractedData = await aiService.extractRequirements(document.rawText);
 
     await document.update({
@@ -156,6 +168,18 @@ async function generateProposal(req, res, next) {
       version: existingCount + 1,
     });
 
+    // Try async job queue first
+    const jobId = await jobQueue.enqueue(jobQueue.JOBS.GENERATE_PROPOSAL, {
+      documentId: document.id,
+      proposalId: genProposal.id,
+      companyProfile,
+    });
+
+    if (jobId) {
+      return res.status(202).json({ jobId, proposalId: genProposal.id, status: 'generating', message: 'Proposal generation queued' });
+    }
+
+    // Fallback: synchronous processing
     const proposalContent = await aiService.generateProposal(document.extractedData, companyProfile);
 
     await genProposal.update({
@@ -222,6 +246,46 @@ async function updateGeneratedProposal(req, res, next) {
   }
 }
 
+// GET /api/rfp-documents/:docId/proposals/:id/export?format=pdf|docx
+async function exportProposal(req, res, next) {
+  try {
+    const proposal = await GeneratedProposal.findOne({
+      where: { id: req.params.id, rfpDocumentId: req.params.docId },
+      include: [{ model: RfpDocument, as: 'rfpDocument' }],
+    });
+
+    if (!proposal) return res.status(404).json({ error: 'Generated proposal not found' });
+
+    if (!proposal.proposalContent) {
+      return res.status(400).json({ error: 'Proposal has no content to export' });
+    }
+
+    const format = req.query.format || 'pdf';
+    const filename = `${(proposal.title || 'Proposal').replace(/[^a-zA-Z0-9_\- ]/g, '')}_v${proposal.version || 1}`;
+
+    if (format === 'docx') {
+      const buffer = await exportService.generateDocx(proposal);
+      res.set({
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Disposition': `attachment; filename="${filename}.docx"`,
+        'Content-Length': buffer.length,
+      });
+      return res.send(buffer);
+    }
+
+    // Default: PDF
+    const buffer = await exportService.generatePdf(proposal);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    return res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   uploadDocument,
   extractRequirements,
@@ -232,4 +296,5 @@ module.exports = {
   listGeneratedProposals,
   getGeneratedProposal,
   updateGeneratedProposal,
+  exportProposal,
 };

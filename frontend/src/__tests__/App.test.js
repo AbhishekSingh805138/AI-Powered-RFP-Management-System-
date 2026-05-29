@@ -170,11 +170,11 @@ describe('App Navigation Links', () => {
     expect(linkTexts).toContain('User Management');
   });
 
-  test('sidebar has 11 navigation links for admin', () => {
+  test('sidebar has 12 navigation links for admin', () => {
     const App = require('../App').default;
     render(<App />);
     const navLinks = screen.getAllByRole('link');
-    expect(navLinks.length).toBe(11);
+    expect(navLinks.length).toBe(12);
   });
 
   test('app title is displayed', () => {

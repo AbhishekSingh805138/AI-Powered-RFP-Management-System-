@@ -3,9 +3,53 @@ const { DocumentEmbedding } = require('../models');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const EMBEDDING_MODEL = 'text-embedding-3-small';
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
 const CHUNK_SIZE = 800; // characters per chunk
 const CHUNK_OVERLAP = 200; // overlap between chunks
+const AI_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS, 10) || 60000;
+
+/**
+ * Wrapper for OpenAI embedding calls with timeout and error handling.
+ */
+async function createEmbedding(params, context) {
+  try {
+    const response = await openai.embeddings.create(params, {
+      timeout: AI_TIMEOUT,
+    });
+
+    if (!response.data || response.data.length === 0) {
+      const err = new Error(`AI returned no embeddings during ${context}`);
+      err.status = 502;
+      throw err;
+    }
+
+    return response;
+  } catch (err) {
+    if (err.status === 502) throw err;
+
+    if (err.code === 'ETIMEDOUT' || err.type === 'request-timeout' || err.message?.includes('timeout')) {
+      const timeoutErr = new Error(`Embedding request timed out during ${context} (limit: ${AI_TIMEOUT}ms)`);
+      timeoutErr.status = 504;
+      throw timeoutErr;
+    }
+
+    if (err.status === 429) {
+      const rateLimitErr = new Error('AI rate limit exceeded. Please try again later.');
+      rateLimitErr.status = 429;
+      throw rateLimitErr;
+    }
+
+    if (err.status >= 500) {
+      const upstreamErr = new Error(`AI service unavailable during ${context}`);
+      upstreamErr.status = 502;
+      throw upstreamErr;
+    }
+
+    const wrappedErr = new Error(`Embedding request failed during ${context}: ${err.message}`);
+    wrappedErr.status = err.status || 500;
+    throw wrappedErr;
+  }
+}
 
 /**
  * Split text into overlapping chunks for embedding.
@@ -46,10 +90,10 @@ function chunkText(text, chunkSize = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
  * Generate embedding vector for a text using OpenAI.
  */
 async function generateEmbedding(text) {
-  const response = await openai.embeddings.create({
+  const response = await createEmbedding({
     model: EMBEDDING_MODEL,
     input: text,
-  });
+  }, 'single embedding');
   return response.data[0].embedding;
 }
 
@@ -59,11 +103,10 @@ async function generateEmbedding(text) {
 async function generateEmbeddingsBatch(texts) {
   if (texts.length === 0) return [];
 
-  // OpenAI supports batch embedding
-  const response = await openai.embeddings.create({
+  const response = await createEmbedding({
     model: EMBEDDING_MODEL,
     input: texts,
-  });
+  }, 'batch embedding');
 
   return response.data.map((d) => d.embedding);
 }

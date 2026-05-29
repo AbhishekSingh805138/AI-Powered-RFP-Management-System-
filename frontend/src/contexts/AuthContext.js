@@ -7,14 +7,33 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const saveTokens = (accessToken, refreshToken) => {
+    try {
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+    } catch {
+      // Private browsing or quota exceeded — session will work in-memory
+      // but won't persist across page reloads
+    }
+  };
+
+  const clearTokens = () => {
+    try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+    } catch {
+      // Ignore — clearing a missing item is harmless
+    }
+  };
+
   const logout = useCallback(() => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    clearTokens();
     setUser(null);
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
+    let token = null;
+    try { token = localStorage.getItem('accessToken'); } catch { /* private browsing */ }
     if (!token) {
       setLoading(false);
       return;
@@ -27,16 +46,14 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await loginUser(email, password);
-    localStorage.setItem('accessToken', res.data.accessToken);
-    localStorage.setItem('refreshToken', res.data.refreshToken);
+    saveTokens(res.data.accessToken, res.data.refreshToken);
     setUser(res.data.user);
     return res.data;
   };
 
   const register = async ({ email, password, firstName, lastName }) => {
     const res = await registerUser({ email, password, firstName, lastName });
-    localStorage.setItem('accessToken', res.data.accessToken);
-    localStorage.setItem('refreshToken', res.data.refreshToken);
+    saveTokens(res.data.accessToken, res.data.refreshToken);
     setUser(res.data.user);
     return res.data;
   };

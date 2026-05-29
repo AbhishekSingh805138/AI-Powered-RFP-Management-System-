@@ -163,7 +163,7 @@ describe('Phase 2 — End-to-End Workflow', () => {
   test('Step 1: Upload RFP PDF', async () => {
     const res = await request(app)
       .post('/api/rfp-documents/upload')
-      .attach('file', Buffer.from('fake pdf content'), { filename: 'cloud-migration-rfp.pdf', contentType: 'application/pdf' });
+      .attach('file', Buffer.from('%PDF-1.4 fake pdf content'), { filename: 'cloud-migration-rfp.pdf', contentType: 'application/pdf' });
 
     expect(res.status).toBe(201);
     expect(res.body.originalFilename).toBe('cloud-migration-rfp.pdf');

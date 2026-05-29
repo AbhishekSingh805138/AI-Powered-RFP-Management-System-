@@ -11,6 +11,7 @@ const RiskAnalysis = require('./RiskAnalysis');
 const ChatConversation = require('./ChatConversation');
 const ChatMessage = require('./ChatMessage');
 const User = require('./User');
+const Notification = require('./Notification');
 
 // Associations
 
@@ -58,6 +59,9 @@ RfpDocument.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 User.hasMany(ChatConversation, { foreignKey: 'user_id', as: 'chatConversations' });
 ChatConversation.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// Notification associations
+User.hasMany(Notification, { foreignKey: 'recipient_id', as: 'notifications', constraints: false, scope: { recipient_type: 'user' } });
+
 module.exports = {
   sequelize,
   Rfp,
@@ -72,4 +76,5 @@ module.exports = {
   ChatConversation,
   ChatMessage,
   User,
+  Notification,
 };

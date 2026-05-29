@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getRfpDocument, extractRfpRequirements } from '../services/api';
+import { useJobPoller } from '../hooks/useJobPoller';
 
 function RfpAnalysis() {
   const { id } = useParams();
@@ -9,6 +10,7 @@ function RfpAnalysis() {
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState('');
+  const { pollJob } = useJobPoller();
 
   useEffect(() => {
     loadDocument();
@@ -30,10 +32,27 @@ function RfpAnalysis() {
     setError('');
     try {
       const res = await extractRfpRequirements(id);
-      setDocument(res.data);
+
+      if (res.status === 202 && res.data.jobId) {
+        // Async job — poll until done
+        pollJob(
+          res.data.jobId,
+          async () => {
+            const refreshed = await getRfpDocument(id);
+            setDocument(refreshed.data);
+            setExtracting(false);
+          },
+          (errMsg) => {
+            setError(`Extraction failed: ${errMsg}`);
+            setExtracting(false);
+          }
+        );
+      } else {
+        setDocument(res.data);
+        setExtracting(false);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Extraction failed');
-    } finally {
       setExtracting(false);
     }
   };

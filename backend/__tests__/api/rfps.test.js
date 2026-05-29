@@ -116,7 +116,10 @@ describe('POST /api/rfps', () => {
       .send({ rawInput: '' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('rawInput is required');
+    expect(res.body.error).toBe('Validation Error');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'rawInput' })])
+    );
   });
 
   test('400 — rejects missing rawInput', async () => {
@@ -133,7 +136,7 @@ describe('POST /api/rfps', () => {
       .send({ rawInput: 'x'.repeat(10001) });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('10,000');
+    expect(res.body.error).toBe('Validation Error');
   });
 });
 
@@ -253,7 +256,10 @@ describe('POST /api/rfps/:id/send', () => {
       .send({ vendorIds: [] });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('vendorIds');
+    expect(res.body.error).toBe('Validation Error');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'vendorIds' })])
+    );
   });
 
   test('400 — rejects non-integer vendorIds', async () => {

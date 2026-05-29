@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { uploadRfpDocument, listRfpDocuments, deleteRfpDocument, extractRfpRequirements } from '../services/api';
+import { uploadRfpDocument, listRfpDocuments, deleteRfpDocument, extractRfpRequirements, getRfpDocument } from '../services/api';
+import { useJobPoller } from '../hooks/useJobPoller';
 
 function RfpAnalyzerUpload() {
   const [documents, setDocuments] = useState([]);
@@ -10,6 +11,7 @@ function RfpAnalyzerUpload() {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
+  const { pollJob } = useJobPoller();
 
   useEffect(() => {
     loadDocuments();
@@ -45,9 +47,23 @@ function RfpAnalyzerUpload() {
       setDocuments((prev) => [{ ...doc, status: 'extracting' }, ...prev]);
       try {
         const extracted = await extractRfpRequirements(doc.id);
-        setDocuments((prev) =>
-          prev.map((d) => (d.id === doc.id ? extracted.data : d))
-        );
+
+        if (extracted.status === 202 && extracted.data.jobId) {
+          // Async job — poll until done
+          pollJob(
+            extracted.data.jobId,
+            async () => {
+              const refreshed = await getRfpDocument(doc.id);
+              setDocuments((prev) => prev.map((d) => (d.id === doc.id ? refreshed.data : d)));
+            },
+            (errMsg) => {
+              setDocuments((prev) => prev.map((d) => (d.id === doc.id ? { ...d, status: 'error' } : d)));
+              setError(`Extraction failed: ${errMsg}`);
+            }
+          );
+        } else {
+          setDocuments((prev) => prev.map((d) => (d.id === doc.id ? extracted.data : d)));
+        }
       } catch (extractErr) {
         setDocuments((prev) =>
           prev.map((d) => (d.id === doc.id ? { ...d, status: 'error' } : d))

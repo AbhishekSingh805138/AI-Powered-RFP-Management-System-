@@ -20,8 +20,9 @@ function VendorList() {
     try {
       const res = await listVendors({ search });
       setVendors(res.data);
+      setError('');
     } catch (err) {
-      // silently handled
+      setError(err.response?.data?.error || 'Failed to load vendors. Please try again.');
     } finally {
       setLoading(false);
     }

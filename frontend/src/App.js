@@ -19,6 +19,7 @@ import ComplianceChecker from './pages/ComplianceChecker';
 import RiskAnalyzer from './pages/RiskAnalyzer';
 import Chatbot from './pages/Chatbot';
 import UserManagement from './pages/UserManagement';
+import Notifications from './pages/Notifications';
 import './styles/App.css';
 
 function AppLayout() {
@@ -40,6 +41,7 @@ function AppLayout() {
           {isManagerOrAdmin && <NavLink to="/compliance">Compliance Checker</NavLink>}
           {isManagerOrAdmin && <NavLink to="/risk-analyzer">Risk Analyzer</NavLink>}
           <NavLink to="/chatbot">AI Chatbot</NavLink>
+          <NavLink to="/notifications">Notifications</NavLink>
           {user?.role === 'admin' && <NavLink to="/admin/users">User Management</NavLink>}
         </nav>
         <div className="sidebar-user">
@@ -74,6 +76,7 @@ function AppLayout() {
             <ProtectedRoute roles={['admin', 'manager']}><RiskAnalyzer /></ProtectedRoute>
           } />
           <Route path="/chatbot" element={<Chatbot />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/admin/users" element={
             <ProtectedRoute roles={['admin']}><UserManagement /></ProtectedRoute>
           } />

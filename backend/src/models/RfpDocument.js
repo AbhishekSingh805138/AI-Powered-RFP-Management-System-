@@ -43,6 +43,12 @@ const RfpDocument = sequelize.define('RfpDocument', {
     allowNull: true,
     field: 'error_message',
   },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'user_id',
+    references: { model: 'users', key: 'id' },
+  },
 }, {
   tableName: 'rfp_documents',
   underscored: true,

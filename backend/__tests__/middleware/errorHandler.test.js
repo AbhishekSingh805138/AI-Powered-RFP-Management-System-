@@ -2,24 +2,22 @@
  * Tests for the errorHandler middleware.
  */
 
+const mockLogger = { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() };
+jest.mock('../../src/utils/logger', () => mockLogger);
+
 const errorHandler = require('../../src/middleware/errorHandler');
 
 describe('errorHandler middleware', () => {
   let req, res, next;
 
   beforeEach(() => {
-    req = {};
+    req = { method: 'GET', originalUrl: '/test' };
     res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn().mockReturnThis(),
     };
     next = jest.fn();
-    // Silence console.error in tests
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
+    mockLogger.error.mockClear();
   });
 
   test('handles SequelizeValidationError with 400 status', () => {
@@ -114,22 +112,28 @@ describe('errorHandler middleware', () => {
     expect(res.status).toHaveBeenCalledWith(500);
   });
 
-  test('logs error message to console.error', () => {
+  test('logs error message via logger', () => {
     const err = new Error('Test error');
     errorHandler(err, req, res, next);
 
-    expect(console.error).toHaveBeenCalledWith('Error:', 'Test error');
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Test error',
+      expect.objectContaining({ method: 'GET', url: '/test' })
+    );
   });
 
-  test('logs stack trace in non-production mode', () => {
+  test('includes stack trace in non-production log', () => {
     const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'test';
+    process.env.NODE_ENV = 'development';
 
     const err = new Error('Test error');
     errorHandler(err, req, res, next);
 
-    // Second call should include the stack
-    expect(console.error).toHaveBeenCalledTimes(2);
+    expect(mockLogger.error).toHaveBeenCalledTimes(1);
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Test error',
+      expect.objectContaining({ stack: expect.any(String) })
+    );
 
     process.env.NODE_ENV = originalEnv;
   });

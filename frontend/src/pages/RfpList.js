@@ -5,17 +5,19 @@ import { listRfps, deleteRfp } from '../services/api';
 function RfpList() {
   const [rfps, setRfps] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadRfps();
   }, []);
 
   async function loadRfps() {
+    setError(null);
     try {
       const res = await listRfps();
       setRfps(res.data);
     } catch (err) {
-      // silently handled
+      setError(err.response?.data?.error || 'Failed to load RFPs. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -39,6 +41,12 @@ function RfpList() {
         <h1>RFPs</h1>
         <Link to="/rfps/new" className="btn btn-primary">Create New RFP</Link>
       </div>
+
+      {error && (
+        <div className="error-message" style={{ marginBottom: 16 }}>
+          {error} <button className="btn btn-secondary btn-sm" onClick={loadRfps} style={{ marginLeft: 8 }}>Retry</button>
+        </div>
+      )}
 
       <div className="card">
         {rfps.length === 0 ? (

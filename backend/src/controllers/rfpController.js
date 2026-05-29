@@ -1,6 +1,7 @@
 const { Rfp, Vendor, RfpVendor, Proposal, Comparison } = require('../models');
 const aiService = require('../services/aiService');
-const emailService = require('../services/emailService');
+const notificationService = require('../services/notificationService');
+const emailTemplates = require('../services/emailTemplates');
 
 // POST /api/rfps — Create RFP from natural language
 async function createRfp(req, res, next) {
@@ -138,6 +139,8 @@ async function sendRfpToVendors(req, res, next) {
     const vendors = await Vendor.findAll({ where: { id: vendorIds } });
     const results = [];
 
+    const appUrl = process.env.APP_URL || null;
+
     for (const vendor of vendors) {
       // Create or find the rfp-vendor link
       const [rfpVendor] = await RfpVendor.findOrCreate({
@@ -146,7 +149,28 @@ async function sendRfpToVendors(req, res, next) {
       });
 
       try {
-        await emailService.sendRfpEmail(vendor.email, vendor.name, rfp);
+        const template = emailTemplates.rfpSentToVendor({
+          vendorName: vendor.name,
+          rfpTitle: rfp.title,
+          rfpId: rfp.id,
+          budget: rfp.budget,
+          deadline: rfp.deadline,
+          items: rfp.structuredData?.items,
+          appUrl,
+        });
+
+        await notificationService.sendNotification({
+          type: 'rfp-sent',
+          recipientEmail: vendor.email,
+          recipientType: 'vendor',
+          recipientId: vendor.id,
+          entityType: 'rfp',
+          entityId: rfp.id,
+          subject: template.subject,
+          html: template.html,
+          text: template.text,
+        });
+
         await rfpVendor.update({ emailStatus: 'sent', sentAt: new Date() });
         results.push({ vendorId: vendor.id, name: vendor.name, status: 'sent' });
       } catch (emailErr) {

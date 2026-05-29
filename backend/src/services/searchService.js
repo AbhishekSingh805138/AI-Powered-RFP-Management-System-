@@ -2,7 +2,51 @@ const OpenAI = require('openai');
 const embeddingService = require('./embeddingService');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = 'gpt-4o-mini';
+const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+const AI_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS, 10) || 60000;
+
+/**
+ * Wrapper for OpenAI chat completion with timeout and error handling.
+ */
+async function createChatCompletion(params, context) {
+  try {
+    const response = await openai.chat.completions.create(params, {
+      timeout: AI_TIMEOUT,
+    });
+
+    if (!response.choices || response.choices.length === 0) {
+      const err = new Error(`AI returned no choices during ${context}`);
+      err.status = 502;
+      throw err;
+    }
+
+    return response.choices[0].message.content;
+  } catch (err) {
+    if (err.status === 502) throw err;
+
+    if (err.code === 'ETIMEDOUT' || err.type === 'request-timeout' || err.message?.includes('timeout')) {
+      const timeoutErr = new Error(`AI request timed out during ${context} (limit: ${AI_TIMEOUT}ms)`);
+      timeoutErr.status = 504;
+      throw timeoutErr;
+    }
+
+    if (err.status === 429) {
+      const rateLimitErr = new Error('AI rate limit exceeded. Please try again later.');
+      rateLimitErr.status = 429;
+      throw rateLimitErr;
+    }
+
+    if (err.status >= 500) {
+      const upstreamErr = new Error(`AI service unavailable during ${context}`);
+      upstreamErr.status = 502;
+      throw upstreamErr;
+    }
+
+    const wrappedErr = new Error(`AI request failed during ${context}: ${err.message}`);
+    wrappedErr.status = err.status || 500;
+    throw wrappedErr;
+  }
+}
 
 /**
  * RAG Search: Embed query → retrieve relevant chunks → generate AI answer with citations.
@@ -27,7 +71,7 @@ async function ragSearch(query, options = {}) {
   ).join('\n\n---\n\n');
 
   // Step 3: Generate answer using context
-  const response = await openai.chat.completions.create({
+  const answerContent = await createChatCompletion({
     model: MODEL,
     temperature: 0.2,
     messages: [
@@ -50,7 +94,7 @@ ${context}`,
         content: query,
       },
     ],
-  });
+  }, 'RAG search');
 
   // Deduplicate sources
   const sourceMap = new Map();
@@ -71,7 +115,7 @@ ${context}`,
   });
 
   return {
-    answer: response.choices[0].message.content,
+    answer: answerContent,
     sources: Array.from(sourceMap.values()).sort((a, b) => b.topSimilarity - a.topSimilarity),
     chunks: relevantChunks.map((c) => ({
       sourceTitle: c.sourceTitle,

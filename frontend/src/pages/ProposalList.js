@@ -7,17 +7,19 @@ function ProposalList() {
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     loadProposals();
   }, []);
 
   async function loadProposals() {
+    setLoadError(null);
     try {
       const res = await listProposals();
       setProposals(res.data);
     } catch (err) {
-      // silently handled
+      setLoadError(err.response?.data?.error || 'Failed to load proposals. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -58,6 +60,11 @@ function ProposalList() {
         </button>
       </div>
 
+      {loadError && (
+        <div className="error-message" style={{ marginBottom: 16 }}>
+          {loadError} <button className="btn btn-secondary btn-sm" onClick={loadProposals} style={{ marginLeft: 8 }}>Retry</button>
+        </div>
+      )}
       {message && <div className="success-msg">{message}</div>}
 
       <div className="card">

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
+const { isTokenBlacklisted } = require('../services/authService');
 
 async function authenticate(req, res, next) {
   const header = req.headers.authorization;
@@ -9,7 +10,10 @@ async function authenticate(req, res, next) {
 
   const token = header.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (isTokenBlacklisted(token)) {
+      return res.status(401).json({ error: 'Token has been revoked' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     const user = await User.findByPk(decoded.id);
     if (!user || user.status === 'suspended') {
       return res.status(401).json({ error: 'Invalid or expired token' });

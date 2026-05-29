@@ -37,6 +37,12 @@ const Vendor = sequelize.define('Vendor', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'user_id',
+    references: { model: 'users', key: 'id' },
+  },
 }, {
   tableName: 'vendors',
   underscored: true,

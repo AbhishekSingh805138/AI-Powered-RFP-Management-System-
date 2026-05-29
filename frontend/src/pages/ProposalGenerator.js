@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getRfpDocument, generateProposalFromRfp, getGeneratedProposal, updateGeneratedProposal } from '../services/api';
+import { getRfpDocument, generateProposalFromRfp, getGeneratedProposal, updateGeneratedProposal, exportProposal, listGeneratedProposals } from '../services/api';
+import { useJobPoller } from '../hooks/useJobPoller';
 
 function ProposalGenerator() {
   const { id, proposalId } = useParams();
@@ -13,8 +14,10 @@ function ProposalGenerator() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [exporting, setExporting] = useState(null);
   const [editingSection, setEditingSection] = useState(null);
   const [editContent, setEditContent] = useState('');
+  const { pollJob } = useJobPoller();
 
   const [companyProfile, setCompanyProfile] = useState({
     company_name: '',
@@ -61,12 +64,35 @@ function ProposalGenerator() {
 
     try {
       const res = await generateProposalFromRfp(id, companyProfile);
-      setProposal(res.data);
-      setSuccessMsg('Proposal generated successfully!');
-      setTimeout(() => setSuccessMsg(''), 3000);
+
+      if (res.status === 202 && res.data.jobId) {
+        // Async job — poll until done
+        pollJob(
+          res.data.jobId,
+          async () => {
+            // Fetch the latest proposals and use the most recent
+            const propRes = res.data.proposalId
+              ? await getGeneratedProposal(id, res.data.proposalId)
+              : await listGeneratedProposals(id);
+            const prop = res.data.proposalId ? propRes.data : propRes.data[0];
+            setProposal(prop);
+            setGenerating(false);
+            setSuccessMsg('Proposal generated successfully!');
+            setTimeout(() => setSuccessMsg(''), 3000);
+          },
+          (errMsg) => {
+            setError(`Generation failed: ${errMsg}`);
+            setGenerating(false);
+          }
+        );
+      } else {
+        setProposal(res.data);
+        setSuccessMsg('Proposal generated successfully!');
+        setTimeout(() => setSuccessMsg(''), 3000);
+        setGenerating(false);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to generate proposal');
-    } finally {
       setGenerating(false);
     }
   };
@@ -107,6 +133,35 @@ function ProposalGenerator() {
     }
   };
 
+  const handleExport = async (format) => {
+    if (!proposal) return;
+    setExporting(format);
+    setError('');
+
+    try {
+      const res = await exportProposal(id, proposal.id, format);
+      const blob = new Blob([res.data], {
+        type: format === 'docx'
+          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : 'application/pdf',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${(proposal.title || 'Proposal').replace(/[^a-zA-Z0-9_\- ]/g, '')}_v${proposal.version || 1}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setSuccessMsg(`${format.toUpperCase()} exported successfully!`);
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      setError(`Failed to export ${format.toUpperCase()}`);
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const handleFinalize = async () => {
     if (!proposal) return;
     try {
@@ -132,6 +187,24 @@ function ProposalGenerator() {
           <button className="btn btn-secondary" onClick={() => navigate(`/rfp-analyzer/${id}`)}>
             Back to Analysis
           </button>
+          {content && (
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => handleExport('pdf')}
+                disabled={!!exporting}
+              >
+                {exporting === 'pdf' ? 'Exporting...' : 'Export PDF'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => handleExport('docx')}
+                disabled={!!exporting}
+              >
+                {exporting === 'docx' ? 'Exporting...' : 'Export DOCX'}
+              </button>
+            </>
+          )}
           {content && proposal.status !== 'finalized' && (
             <button className="btn btn-success" onClick={handleFinalize}>
               Finalize Proposal

@@ -143,7 +143,10 @@ describe('POST /api/compliance/check', () => {
       .send({ generatedProposalId: 5 });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('rfpDocumentId is required');
+    expect(res.body.error).toBe('Validation Error');
+    expect(res.body.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'rfpDocumentId' })])
+    );
   });
 
   test('400 — rejects when neither proposal nor text is provided', async () => {
