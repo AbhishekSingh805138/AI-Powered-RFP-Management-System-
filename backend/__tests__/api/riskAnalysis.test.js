@@ -20,6 +20,7 @@ const mockModels = {
     create: jest.fn(),
     findByPk: jest.fn(),
     findAll: jest.fn(),
+    findAndCountAll: jest.fn(),
   },
   ChatConversation: { create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn(), update: jest.fn() },
   ChatMessage: { create: jest.fn(), findAll: jest.fn(), count: jest.fn(), destroy: jest.fn() },
@@ -177,20 +178,27 @@ describe('Risk Analysis API — /api/risk-analysis', () => {
 
   describe('GET / — List Risk Analyses', () => {
     test('returns all analyses', async () => {
-      mockModels.RiskAnalysis.findAll.mockResolvedValue([
-        { id: 1, overallRiskScore: 40 },
-        { id: 2, overallRiskScore: 70 },
-      ]);
+      mockModels.RiskAnalysis.findAndCountAll.mockResolvedValue({
+        count: 2,
+        rows: [
+          { id: 1, overallRiskScore: 40 },
+          { id: 2, overallRiskScore: 70 },
+        ],
+      });
 
       const res = await request(app).get('/api/risk-analysis');
       expect(res.status).toBe(200);
-      expect(res.body.length).toBe(2);
+      expect(res.body.data).toHaveLength(2);
+      expect(res.body.total).toBe(2);
+      expect(res.body.page).toBe(1);
+      expect(res.body.limit).toBe(20);
     });
 
     test('filters by rfpDocumentId query param', async () => {
-      mockModels.RiskAnalysis.findAll.mockResolvedValue([{ id: 1, rfpDocumentId: 5 }]);
+      mockModels.RiskAnalysis.findAndCountAll.mockResolvedValue({ count: 1, rows: [{ id: 1, rfpDocumentId: 5 }] });
       const res = await request(app).get('/api/risk-analysis?rfpDocumentId=5');
       expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
     });
   });
 

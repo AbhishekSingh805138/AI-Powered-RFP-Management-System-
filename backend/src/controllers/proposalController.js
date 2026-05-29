@@ -14,6 +14,9 @@ async function createProposal(req, res, next) {
 
     const rfp = await Rfp.findByPk(rfpId);
     if (!rfp) return res.status(404).json({ error: 'RFP not found' });
+    if (req.user.role !== 'admin' && rfp.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     const vendor = await Vendor.findByPk(vendorId);
     if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
@@ -40,6 +43,9 @@ async function parseProposal(req, res, next) {
     });
 
     if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+    if (req.user.role !== 'admin' && proposal.rfp?.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     await proposal.update({ status: 'parsing' });
 
@@ -83,6 +89,12 @@ async function uploadProposal(req, res, next) {
     if (!req.file) return res.status(400).json({ error: 'PDF file is required' });
     if (!rfpId || !vendorId) return res.status(400).json({ error: 'rfpId and vendorId are required' });
 
+    const rfp = await Rfp.findByPk(parseInt(rfpId, 10));
+    if (!rfp) return res.status(404).json({ error: 'RFP not found' });
+    if (req.user.role !== 'admin' && rfp.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const pdfData = await pdf(req.file.buffer);
 
     const proposal = await Proposal.create({
@@ -117,16 +129,29 @@ async function listProposals(req, res, next) {
       where.rfpId = rfpId;
     }
 
-    const proposals = await Proposal.findAll({
+    // Scope: non-admins only see proposals for their own RFPs
+    const rfpWhere = {};
+    if (req.user.role !== 'admin') {
+      rfpWhere.userId = req.user.id;
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const offset = (page - 1) * limit;
+
+    const { count, rows } = await Proposal.findAndCountAll({
       where,
       include: [
         { model: Vendor, as: 'vendor', attributes: ['id', 'name', 'email', 'company'] },
-        { model: Rfp, as: 'rfp', attributes: ['id', 'title'] },
+        { model: Rfp, as: 'rfp', attributes: ['id', 'title', 'userId'], where: rfpWhere },
       ],
       order: [['created_at', 'DESC']],
+      limit,
+      offset,
+      distinct: true,
     });
 
-    res.json(proposals);
+    res.json({ data: rows, total: count, page, limit });
   } catch (err) {
     next(err);
   }
@@ -143,6 +168,9 @@ async function getProposal(req, res, next) {
     });
 
     if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+    if (req.user.role !== 'admin' && proposal.rfp?.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     res.json(proposal);
   } catch (err) {
     next(err);

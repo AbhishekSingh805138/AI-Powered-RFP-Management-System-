@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 const { DocumentEmbedding } = require('../models');
+const sequelize = require('../config/database');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -67,10 +68,8 @@ function chunkText(text, chunkSize = CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
     // Try to break at sentence boundary
     if (end < cleaned.length) {
       const lastPeriod = cleaned.lastIndexOf('. ', end);
-      const lastNewline = cleaned.lastIndexOf('\n', end);
-      const breakPoint = Math.max(lastPeriod, lastNewline);
-      if (breakPoint > start + chunkSize * 0.5) {
-        end = breakPoint + 1;
+      if (lastPeriod > start + chunkSize * 0.5) {
+        end = lastPeriod + 1;
       }
     }
 
@@ -115,6 +114,9 @@ async function generateEmbeddingsBatch(texts) {
  * Cosine similarity between two vectors.
  */
 function cosineSimilarity(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || a.length === 0) {
+    return 0;
+  }
   let dotProduct = 0;
   let normA = 0;
   let normB = 0;
@@ -123,7 +125,9 @@ function cosineSimilarity(a, b) {
     normA += a[i] * a[i];
     normB += b[i] * b[i];
   }
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denominator === 0) return 0;
+  return dotProduct / denominator;
 }
 
 /**
@@ -133,15 +137,10 @@ function cosineSimilarity(a, b) {
 async function indexDocument(sourceType, sourceId, text, title, metadata = {}) {
   if (!text || !text.trim()) return { indexed: 0 };
 
-  // Remove existing embeddings for this source
-  await DocumentEmbedding.destroy({
-    where: { sourceType, sourceId },
-  });
-
   const chunks = chunkText(text);
   if (chunks.length === 0) return { indexed: 0 };
 
-  // Generate embeddings in batches of 20
+  // Generate embeddings in batches of 20 (outside transaction — API calls shouldn't hold DB locks)
   const batchSize = 20;
   const records = [];
 
@@ -162,18 +161,25 @@ async function indexDocument(sourceType, sourceId, text, title, metadata = {}) {
     }
   }
 
-  await DocumentEmbedding.bulkCreate(records);
+  // Atomic replace: delete old + insert new in a single transaction
+  await sequelize.transaction(async (t) => {
+    await DocumentEmbedding.destroy({ where: { sourceType, sourceId }, transaction: t });
+    await DocumentEmbedding.bulkCreate(records, { transaction: t });
+  });
 
   return { indexed: records.length, chunks: chunks.length };
 }
 
 /**
  * Semantic search: embed query, find top-K most similar chunks.
+ * MAX_SEARCH_ROWS caps the number of rows loaded into memory for cosine comparison.
  */
+const MAX_SEARCH_ROWS = parseInt(process.env.MAX_SEARCH_ROWS, 10) || 5000;
+
 async function semanticSearch(query, topK = 10, filterSourceType = null) {
   const queryEmbedding = await generateEmbedding(query);
 
-  // Fetch all embeddings (with optional source type filter)
+  // Fetch embeddings with optional source type filter, capped for memory safety
   const where = {};
   if (filterSourceType) {
     where.sourceType = filterSourceType;
@@ -182,6 +188,8 @@ async function semanticSearch(query, topK = 10, filterSourceType = null) {
   const allEmbeddings = await DocumentEmbedding.findAll({
     where,
     attributes: ['id', 'sourceType', 'sourceId', 'sourceTitle', 'chunkIndex', 'chunkText', 'embedding', 'metadata'],
+    limit: MAX_SEARCH_ROWS,
+    order: [['created_at', 'DESC']],
   });
 
   // Compute similarities

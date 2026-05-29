@@ -38,8 +38,12 @@ async function listVendors(req, res, next) {
       where.category = category;
     }
 
-    const vendors = await Vendor.findAll({ where, order: [['name', 'ASC']] });
-    res.json(vendors);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const offset = (page - 1) * limit;
+
+    const { count, rows } = await Vendor.findAndCountAll({ where, order: [['name', 'ASC']], limit, offset });
+    res.json({ data: rows, total: count, page, limit });
   } catch (err) {
     next(err);
   }

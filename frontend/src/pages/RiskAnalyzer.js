@@ -34,8 +34,8 @@ function RiskAnalyzer() {
         listRfpDocuments(),
         listRiskAnalyses(),
       ]);
-      setRfpDocuments(docsRes.data.filter((d) => d.status === 'extracted'));
-      setHistory(historyRes.data);
+      setRfpDocuments((docsRes.data.data || docsRes.data).filter((d) => d.status === 'extracted'));
+      setHistory(historyRes.data.data || historyRes.data);
     } catch (err) {
       setError('Failed to load data');
     } finally {

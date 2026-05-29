@@ -22,7 +22,7 @@ const mockModels = {
   RiskAnalysis: { create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn() },
   ChatConversation: { create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn(), update: jest.fn() },
   ChatMessage: { create: jest.fn(), findAll: jest.fn(), count: jest.fn(), destroy: jest.fn() },
-  Rfp: { findAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
+  Rfp: { findAll: jest.fn(), findAndCountAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
   Vendor: { findAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
   RfpVendor: { findOrCreate: jest.fn() },
   Proposal: { findAll: jest.fn(), findByPk: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -277,7 +277,7 @@ describe('Auth API — /api/auth', () => {
     test('viewer can read RFPs (GET is open to all authenticated)', async () => {
       const user = { id: 1, email: 'viewer@test.com', role: 'viewer', status: 'active' };
       mockModels.User.findByPk.mockResolvedValue(user);
-      mockModels.Rfp.findAll.mockResolvedValue([]);
+      mockModels.Rfp.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
       const token = jwt.sign({ id: 1, email: 'viewer@test.com', role: 'viewer' }, process.env.JWT_SECRET, { expiresIn: '15m' });
 
       const res = await request(app).get('/api/rfps')

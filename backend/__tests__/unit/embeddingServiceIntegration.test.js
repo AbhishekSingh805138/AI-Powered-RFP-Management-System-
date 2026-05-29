@@ -22,6 +22,10 @@ jest.mock('../../src/models', () => ({
   DocumentEmbedding: mockDocumentEmbedding,
 }));
 
+jest.mock('../../src/config/database', () => ({
+  transaction: jest.fn((cb) => cb({})),
+}));
+
 const {
   generateEmbedding,
   generateEmbeddingsBatch,
@@ -102,6 +106,7 @@ describe('embeddingService — async functions', () => {
 
       expect(mockDocumentEmbedding.destroy).toHaveBeenCalledWith({
         where: { sourceType: 'rfp_document', sourceId: 1 },
+        transaction: expect.anything(),
       });
     });
 

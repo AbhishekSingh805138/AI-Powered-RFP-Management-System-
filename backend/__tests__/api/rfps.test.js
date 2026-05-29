@@ -15,6 +15,7 @@ const mockModels = {
   Rfp: {
     create: jest.fn(),
     findAll: jest.fn(),
+    findAndCountAll: jest.fn(),
     findByPk: jest.fn(),
   },
   Vendor: { findAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
@@ -144,13 +145,16 @@ describe('GET /api/rfps', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('200 — lists all RFPs with associations', async () => {
-    mockModels.Rfp.findAll.mockResolvedValue([createMockRfp({ id: 1 }), createMockRfp({ id: 2 })]);
+    mockModels.Rfp.findAndCountAll.mockResolvedValue({ count: 2, rows: [createMockRfp({ id: 1 }), createMockRfp({ id: 2 })] });
 
     const res = await request(app)
       .get('/api/rfps');
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.total).toBe(2);
+    expect(res.body.page).toBe(1);
+    expect(res.body.limit).toBe(20);
   });
 });
 

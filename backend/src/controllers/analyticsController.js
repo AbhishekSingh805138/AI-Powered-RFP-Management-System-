@@ -1,4 +1,4 @@
-const { Rfp, Vendor, Proposal, RfpDocument, GeneratedProposal, RiskAnalysis, ChatConversation } = require('../models');
+const { Rfp, Vendor, Proposal, RfpDocument, RiskAnalysis, ChatConversation } = require('../models');
 
 // GET /api/analytics — Aggregated dashboard analytics
 async function getAnalytics(req, res, next) {
@@ -8,12 +8,16 @@ async function getAnalytics(req, res, next) {
     const userFilterSnake = isAdmin ? {} : { user_id: req.user.id };
 
     // Run all queries in parallel
+    // Proposals belong to RFPs (scoped via rfpId), RiskAnalyses belong to RfpDocuments (scoped via rfpDocumentId)
+    const proposalInclude = isAdmin ? [] : [{ model: Rfp, as: 'rfp', attributes: [], where: userFilter, required: true }];
+    const riskInclude = isAdmin ? [] : [{ model: RfpDocument, as: 'rfpDocument', attributes: [], where: userFilterSnake, required: true }];
+
     const [rfps, vendors, proposals, documents, riskAnalyses, conversations] = await Promise.all([
       Rfp.findAll({ where: userFilter, attributes: ['id', 'status', 'budget', 'createdAt'] }),
       Vendor.findAll({ where: userFilter, attributes: ['id', 'createdAt'] }),
-      Proposal.findAll({ attributes: ['id', 'status', 'totalPrice', 'score', 'sourceType', 'createdAt'] }),
+      Proposal.findAll({ attributes: ['id', 'status', 'totalPrice', 'score', 'sourceType', 'createdAt'], include: proposalInclude }),
       RfpDocument.findAll({ where: userFilterSnake, attributes: ['id', 'status', 'createdAt'] }),
-      RiskAnalysis.findAll({ attributes: ['id', 'overallRiskLevel', 'overallRiskScore', 'status', 'createdAt'] }),
+      RiskAnalysis.findAll({ attributes: ['id', 'overallRiskLevel', 'overallRiskScore', 'status', 'createdAt'], include: riskInclude }),
       ChatConversation.findAll({ where: userFilterSnake, attributes: ['id', 'createdAt'] }),
     ]);
 

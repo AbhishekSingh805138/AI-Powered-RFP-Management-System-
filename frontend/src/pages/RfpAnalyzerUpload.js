@@ -20,7 +20,7 @@ function RfpAnalyzerUpload() {
   const loadDocuments = async () => {
     try {
       const res = await listRfpDocuments();
-      setDocuments(res.data);
+      setDocuments(res.data.data);
     } catch (err) {
       setError('Failed to load documents');
     } finally {

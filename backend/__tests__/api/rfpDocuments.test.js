@@ -16,6 +16,7 @@ const mockModels = {
   RfpDocument: {
     create: jest.fn(),
     findAll: jest.fn(),
+    findAndCountAll: jest.fn(),
     findByPk: jest.fn(),
   },
   GeneratedProposal: {
@@ -186,23 +187,27 @@ describe('GET /api/rfp-documents', () => {
       createMockRfpDocument({ id: 1 }),
       createMockRfpDocument({ id: 2 }),
     ];
-    mockModels.RfpDocument.findAll.mockResolvedValue(docs);
+    mockModels.RfpDocument.findAndCountAll.mockResolvedValue({ count: 2, rows: docs });
 
     const res = await request(app)
       .get('/api/rfp-documents');
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.total).toBe(2);
+    expect(res.body.page).toBe(1);
+    expect(res.body.limit).toBe(20);
   });
 
-  test('200 — returns empty array when no documents exist', async () => {
-    mockModels.RfpDocument.findAll.mockResolvedValue([]);
+  test('200 — returns empty data when no documents exist', async () => {
+    mockModels.RfpDocument.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
 
     const res = await request(app)
       .get('/api/rfp-documents');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+    expect(res.body.data).toEqual([]);
+    expect(res.body.total).toBe(0);
   });
 });
 
@@ -329,6 +334,7 @@ describe('GET /api/rfp-documents/:docId/proposals', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('200 — lists generated proposals for a document', async () => {
+    mockModels.RfpDocument.findByPk.mockResolvedValue({ id: 5, userId: 1 });
     const proposals = [
       createMockGeneratedProposal({ id: 1, rfpDocumentId: 5, version: 1 }),
       createMockGeneratedProposal({ id: 2, rfpDocumentId: 5, version: 2 }),

@@ -1,4 +1,5 @@
 const { RfpDocument, GeneratedProposal, Proposal, Rfp } = require('../models');
+const { Op } = require('sequelize');
 const embeddingService = require('../services/embeddingService');
 const searchService = require('../services/searchService');
 
@@ -102,7 +103,7 @@ async function indexAll(req, res, next) {
     }
 
     // Index Generated Proposals
-    const genProposals = await GeneratedProposal.findAll({ where: { status: ['generated', 'edited', 'finalized'] } });
+    const genProposals = await GeneratedProposal.findAll({ where: { status: { [Op.in]: ['generated', 'edited', 'finalized'] } } });
     for (const gp of genProposals) {
       try {
         const text = flattenProposalContent(gp.proposalContent);

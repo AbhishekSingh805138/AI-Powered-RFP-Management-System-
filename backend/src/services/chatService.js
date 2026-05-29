@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const embeddingService = require('./embeddingService');
 const { ChatConversation, ChatMessage } = require('../models');
+const logger = require('../utils/logger');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
@@ -97,7 +98,7 @@ async function chat(conversationId, userMessage, options = {}) {
   try {
     relevantChunks = await embeddingService.semanticSearch(userMessage, topK, filterSourceType);
   } catch (err) {
-    // If embedding search fails (e.g. no indexed docs), continue without RAG context
+    logger.warn('RAG search failed, continuing without context', { error: err.message, conversationId });
   }
 
   // Step 4: Build context from retrieved chunks

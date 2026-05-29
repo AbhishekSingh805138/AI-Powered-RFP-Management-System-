@@ -29,7 +29,7 @@ function ComplianceChecker() {
   const loadData = async () => {
     try {
       const res = await listRfpDocuments();
-      setRfpDocuments(res.data.filter((d) => d.status === 'extracted'));
+      setRfpDocuments((res.data.data || res.data).filter((d) => d.status === 'extracted'));
     } catch (err) {
       setError('Failed to load documents');
     } finally {

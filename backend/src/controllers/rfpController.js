@@ -43,15 +43,22 @@ async function listRfps(req, res, next) {
       where.userId = req.user.id;
     }
 
-    const rfps = await Rfp.findAll({
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const offset = (page - 1) * limit;
+
+    const { count, rows } = await Rfp.findAndCountAll({
       where,
       order: [['created_at', 'DESC']],
       include: [
         { model: Vendor, as: 'vendors', through: { attributes: ['email_status', 'sent_at'] } },
         { model: Proposal, as: 'proposals', attributes: ['id', 'vendor_id', 'status', 'total_price', 'score'] },
       ],
+      limit,
+      offset,
+      distinct: true,
     });
-    res.json(rfps);
+    res.json({ data: rows, total: count, page, limit });
   } catch (err) {
     next(err);
   }

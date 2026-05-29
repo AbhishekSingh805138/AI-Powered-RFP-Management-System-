@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require('uuid');
  * Sets X-Request-Id response header for client-side correlation.
  */
 function requestId(req, res, next) {
-  req.id = req.headers['x-request-id'] || uuidv4();
+  req.id = uuidv4();
   res.setHeader('X-Request-Id', req.id);
   next();
 }

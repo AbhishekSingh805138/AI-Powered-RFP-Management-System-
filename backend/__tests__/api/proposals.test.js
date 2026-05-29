@@ -18,6 +18,7 @@ const mockModels = {
   Proposal: {
     create: jest.fn(),
     findAll: jest.fn(),
+    findAndCountAll: jest.fn(),
     findByPk: jest.fn(),
     update: jest.fn(),
   },
@@ -198,25 +199,28 @@ describe('GET /api/proposals', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('200 — lists all proposals', async () => {
-    mockModels.Proposal.findAll.mockResolvedValue([
-      createMockProposal({ id: 1 }),
-      createMockProposal({ id: 2 }),
-    ]);
+    mockModels.Proposal.findAndCountAll.mockResolvedValue({
+      count: 2,
+      rows: [createMockProposal({ id: 1 }), createMockProposal({ id: 2 })],
+    });
 
     const res = await request(app)
       .get('/api/proposals');
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.total).toBe(2);
+    expect(res.body.page).toBe(1);
+    expect(res.body.limit).toBe(20);
   });
 
   test('200 — filters by rfpId', async () => {
-    mockModels.Proposal.findAll.mockResolvedValue([]);
+    mockModels.Proposal.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
 
     await request(app)
       .get('/api/proposals?rfpId=5');
 
-    expect(mockModels.Proposal.findAll).toHaveBeenCalledWith(
+    expect(mockModels.Proposal.findAndCountAll).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { rfpId: 5 },
       })

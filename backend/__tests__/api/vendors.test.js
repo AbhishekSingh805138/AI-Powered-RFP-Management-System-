@@ -16,6 +16,7 @@ const mockModels = {
   Vendor: {
     create: jest.fn(),
     findAll: jest.fn(),
+    findAndCountAll: jest.fn(),
     findByPk: jest.fn(),
     findOne: jest.fn(),
   },
@@ -121,22 +122,25 @@ describe('GET /api/vendors', () => {
 
   test('200 — lists all vendors', async () => {
     const vendors = [createMockVendor({ id: 1 }), createMockVendor({ id: 2 })];
-    mockModels.Vendor.findAll.mockResolvedValue(vendors);
+    mockModels.Vendor.findAndCountAll.mockResolvedValue({ count: 2, rows: vendors });
 
     const res = await request(app)
       .get('/api/vendors');
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.total).toBe(2);
+    expect(res.body.page).toBe(1);
+    expect(res.body.limit).toBe(20);
   });
 
   test('200 — filters by search query', async () => {
-    mockModels.Vendor.findAll.mockResolvedValue([]);
+    mockModels.Vendor.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
 
     await request(app)
       .get('/api/vendors?search=Acme');
 
-    expect(mockModels.Vendor.findAll).toHaveBeenCalledWith(
+    expect(mockModels.Vendor.findAndCountAll).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           [Op.or]: expect.any(Array),
@@ -146,12 +150,12 @@ describe('GET /api/vendors', () => {
   });
 
   test('200 — filters by category', async () => {
-    mockModels.Vendor.findAll.mockResolvedValue([]);
+    mockModels.Vendor.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
 
     await request(app)
       .get('/api/vendors?category=IT');
 
-    expect(mockModels.Vendor.findAll).toHaveBeenCalledWith(
+    expect(mockModels.Vendor.findAndCountAll).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ category: 'IT' }),
       })

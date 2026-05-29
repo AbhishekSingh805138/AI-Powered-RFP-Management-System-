@@ -13,6 +13,9 @@ async function analyzeRisks(req, res, next) {
 
     const rfpDoc = await RfpDocument.findByPk(rfpDocumentId);
     if (!rfpDoc) return res.status(404).json({ error: 'RFP Document not found' });
+    if (req.user.role !== 'admin' && rfpDoc.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     if (!rfpDoc.extractedData) {
       return res.status(400).json({ error: 'RFP requirements must be extracted first' });
     }
@@ -62,12 +65,15 @@ async function getRiskAnalysis(req, res, next) {
   try {
     const analysis = await RiskAnalysis.findByPk(req.params.id, {
       include: [
-        { model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'title', 'originalFilename'] },
+        { model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'title', 'originalFilename', 'userId'] },
         { model: GeneratedProposal, as: 'generatedProposal', attributes: ['id', 'title', 'version'] },
       ],
     });
 
     if (!analysis) return res.status(404).json({ error: 'Risk analysis not found' });
+    if (req.user.role !== 'admin' && analysis.rfpDocument?.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     res.json(analysis);
   } catch (err) {
     next(err);
@@ -82,16 +88,28 @@ async function listRiskAnalyses(req, res, next) {
       where.rfpDocumentId = req.query.rfpDocumentId;
     }
 
-    const analyses = await RiskAnalysis.findAll({
+    const rfpWhere = {};
+    if (req.user.role !== 'admin') {
+      rfpWhere.userId = req.user.id;
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const offset = (page - 1) * limit;
+
+    const { count, rows } = await RiskAnalysis.findAndCountAll({
       where,
       attributes: ['id', 'rfpDocumentId', 'generatedProposalId', 'overallRiskScore', 'overallRiskLevel', 'status', 'createdAt'],
       include: [
-        { model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'title', 'originalFilename'] },
+        { model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'title', 'originalFilename'], where: rfpWhere },
       ],
       order: [['created_at', 'DESC']],
+      limit,
+      offset,
+      distinct: true,
     });
 
-    res.json(analyses);
+    res.json({ data: rows, total: count, page, limit });
   } catch (err) {
     next(err);
   }
@@ -106,8 +124,14 @@ async function compareRisks(req, res, next) {
       return res.status(400).json({ error: 'At least 2 analysisIds are required for comparison' });
     }
 
+    const rfpWhere = {};
+    if (req.user.role !== 'admin') {
+      rfpWhere.userId = req.user.id;
+    }
+
     const analyses = await RiskAnalysis.findAll({
       where: { id: analysisIds, status: 'completed' },
+      include: [{ model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'userId'], where: rfpWhere }],
     });
 
     if (analyses.length < 2) {
@@ -129,8 +153,13 @@ async function compareRisks(req, res, next) {
 // DELETE /api/risk-analysis/:id — Delete a risk analysis
 async function deleteRiskAnalysis(req, res, next) {
   try {
-    const analysis = await RiskAnalysis.findByPk(req.params.id);
+    const analysis = await RiskAnalysis.findByPk(req.params.id, {
+      include: [{ model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'userId'] }],
+    });
     if (!analysis) return res.status(404).json({ error: 'Risk analysis not found' });
+    if (req.user.role !== 'admin' && analysis.rfpDocument?.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     await analysis.destroy();
     res.json({ message: 'Risk analysis deleted' });

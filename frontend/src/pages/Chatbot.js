@@ -35,7 +35,7 @@ function Chatbot() {
   const loadConversations = async () => {
     try {
       const res = await listConversations();
-      setConversations(res.data);
+      setConversations(res.data.data);
     } catch (err) {
       // Non-critical
     } finally {

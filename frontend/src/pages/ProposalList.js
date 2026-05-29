@@ -17,7 +17,7 @@ function ProposalList() {
     setLoadError(null);
     try {
       const res = await listProposals();
-      setProposals(res.data);
+      setProposals(res.data.data);
     } catch (err) {
       setLoadError(err.response?.data?.error || 'Failed to load proposals. Please try again.');
     } finally {

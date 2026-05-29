@@ -13,8 +13,8 @@ process.env.DB_PASSWORD = 'test';
 const request = require('supertest');
 
 const mockModels = {
-  Vendor: { create: jest.fn(), findAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn() },
-  Rfp: { findAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
+  Vendor: { create: jest.fn(), findAll: jest.fn(), findAndCountAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn() },
+  Rfp: { findAll: jest.fn(), findAndCountAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
   RfpVendor: { findOrCreate: jest.fn() },
   Proposal: { findAll: jest.fn(), findByPk: jest.fn(), create: jest.fn(), update: jest.fn() },
   Comparison: { create: jest.fn() },
@@ -22,7 +22,7 @@ const mockModels = {
   GeneratedProposal: { findByPk: jest.fn(), findAll: jest.fn(), findOne: jest.fn(), create: jest.fn(), count: jest.fn(), destroy: jest.fn() },
   DocumentEmbedding: {},
   RiskAnalysis: { create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn() },
-  ChatConversation: { create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn(), update: jest.fn() },
+  ChatConversation: { create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn(), findAndCountAll: jest.fn(), update: jest.fn() },
   ChatMessage: { create: jest.fn(), findAll: jest.fn(), count: jest.fn(), destroy: jest.fn() },
   User: { findByPk: jest.fn(), findOne: jest.fn(), create: jest.fn(), findAll: jest.fn(), scope: jest.fn() },
   sequelize: { authenticate: jest.fn(), sync: jest.fn(), close: jest.fn() },
@@ -129,13 +129,13 @@ describe('RBAC — Viewer role restrictions', () => {
   });
 
   test('200 — viewer can list RFPs (own data)', async () => {
-    mockModels.Rfp.findAll.mockResolvedValue([]);
+    mockModels.Rfp.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
 
     const res = await request(app).get('/api/rfps');
 
     expect(res.status).toBe(200);
     // Verify user-scoping filter is applied
-    expect(mockModels.Rfp.findAll).toHaveBeenCalledWith(
+    expect(mockModels.Rfp.findAndCountAll).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ userId: 10 }),
       })
@@ -143,12 +143,12 @@ describe('RBAC — Viewer role restrictions', () => {
   });
 
   test('200 — viewer can list vendors (own data)', async () => {
-    mockModels.Vendor.findAll.mockResolvedValue([]);
+    mockModels.Vendor.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
 
     const res = await request(app).get('/api/vendors');
 
     expect(res.status).toBe(200);
-    expect(mockModels.Vendor.findAll).toHaveBeenCalledWith(
+    expect(mockModels.Vendor.findAndCountAll).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ userId: 10 }),
       })
@@ -156,12 +156,12 @@ describe('RBAC — Viewer role restrictions', () => {
   });
 
   test('200 — viewer can list conversations (own data)', async () => {
-    mockModels.ChatConversation.findAll.mockResolvedValue([]);
+    mockModels.ChatConversation.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
 
     const res = await request(app).get('/api/chat/conversations');
 
     expect(res.status).toBe(200);
-    expect(mockModels.ChatConversation.findAll).toHaveBeenCalledWith(
+    expect(mockModels.ChatConversation.findAndCountAll).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ userId: 10 }),
       })
@@ -286,11 +286,11 @@ describe('RBAC — Admin bypasses user-scoping', () => {
   });
 
   test('admin lists all RFPs without user filter', async () => {
-    mockModels.Rfp.findAll.mockResolvedValue([]);
+    mockModels.Rfp.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
 
     await request(app).get('/api/rfps');
 
-    const findAllArg = mockModels.Rfp.findAll.mock.calls[0][0];
+    const findAllArg = mockModels.Rfp.findAndCountAll.mock.calls[0][0];
     expect(findAllArg.where.userId).toBeUndefined();
   });
 

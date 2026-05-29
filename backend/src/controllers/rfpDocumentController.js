@@ -82,7 +82,11 @@ async function listDocuments(req, res, next) {
       where.userId = req.user.id;
     }
 
-    const documents = await RfpDocument.findAll({
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const offset = (page - 1) * limit;
+
+    const { count, rows } = await RfpDocument.findAndCountAll({
       where,
       attributes: ['id', 'title', 'originalFilename', 'fileSize', 'status', 'createdAt', 'updatedAt'],
       include: [{
@@ -91,9 +95,12 @@ async function listDocuments(req, res, next) {
         attributes: ['id', 'status', 'version'],
       }],
       order: [['created_at', 'DESC']],
+      limit,
+      offset,
+      distinct: true,
     });
 
-    res.json(documents);
+    res.json({ data: rows, total: count, page, limit });
   } catch (err) {
     next(err);
   }
@@ -197,6 +204,12 @@ async function generateProposal(req, res, next) {
 // GET /api/rfp-documents/:docId/proposals — List generated proposals for a document
 async function listGeneratedProposals(req, res, next) {
   try {
+    const document = await RfpDocument.findByPk(req.params.docId, { attributes: ['id', 'userId'] });
+    if (!document) return res.status(404).json({ error: 'Document not found' });
+    if (req.user.role !== 'admin' && document.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const proposals = await GeneratedProposal.findAll({
       where: { rfpDocumentId: req.params.docId },
       order: [['created_at', 'DESC']],
@@ -217,6 +230,9 @@ async function getGeneratedProposal(req, res, next) {
     });
 
     if (!proposal) return res.status(404).json({ error: 'Generated proposal not found' });
+    if (req.user.role !== 'admin' && proposal.rfpDocument?.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     res.json(proposal);
   } catch (err) {
     next(err);
@@ -228,9 +244,13 @@ async function updateGeneratedProposal(req, res, next) {
   try {
     const proposal = await GeneratedProposal.findOne({
       where: { id: req.params.id, rfpDocumentId: req.params.docId },
+      include: [{ model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'userId'] }],
     });
 
     if (!proposal) return res.status(404).json({ error: 'Generated proposal not found' });
+    if (req.user.role !== 'admin' && proposal.rfpDocument?.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     const { proposalContent, title, status } = req.body;
 
@@ -255,6 +275,9 @@ async function exportProposal(req, res, next) {
     });
 
     if (!proposal) return res.status(404).json({ error: 'Generated proposal not found' });
+    if (req.user.role !== 'admin' && proposal.rfpDocument?.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     if (!proposal.proposalContent) {
       return res.status(400).json({ error: 'Proposal has no content to export' });

@@ -136,7 +136,7 @@ async function changePassword(userId, { currentPassword, newPassword }) {
     throw error;
   }
 
-  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const passwordHash = await bcrypt.hash(newPassword, 12);
   await user.update({ passwordHash });
   return { message: 'Password changed successfully' };
 }

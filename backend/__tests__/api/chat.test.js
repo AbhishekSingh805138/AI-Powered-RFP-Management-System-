@@ -20,6 +20,7 @@ const mockModels = {
     create: jest.fn(),
     findByPk: jest.fn(),
     findAll: jest.fn(),
+    findAndCountAll: jest.fn(),
   },
   ChatMessage: {
     create: jest.fn(),
@@ -104,20 +105,27 @@ describe('Chat API — /api/chat', () => {
 
   describe('GET /conversations — List Conversations', () => {
     test('returns active conversations', async () => {
-      mockModels.ChatConversation.findAll.mockResolvedValue([
-        { id: 1, title: 'Conv 1', status: 'active' },
-        { id: 2, title: 'Conv 2', status: 'active' },
-      ]);
+      mockModels.ChatConversation.findAndCountAll.mockResolvedValue({
+        count: 2,
+        rows: [
+          { id: 1, title: 'Conv 1', status: 'active' },
+          { id: 2, title: 'Conv 2', status: 'active' },
+        ],
+      });
 
       const res = await request(app).get('/api/chat/conversations');
       expect(res.status).toBe(200);
-      expect(res.body.length).toBe(2);
+      expect(res.body.data).toHaveLength(2);
+      expect(res.body.total).toBe(2);
+      expect(res.body.page).toBe(1);
+      expect(res.body.limit).toBe(20);
     });
 
     test('filters by status query param', async () => {
-      mockModels.ChatConversation.findAll.mockResolvedValue([]);
+      mockModels.ChatConversation.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
       const res = await request(app).get('/api/chat/conversations?status=archived');
       expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
     });
   });
 
