@@ -28,6 +28,9 @@ async function indexDocument(req, res, next) {
   try {
     const { sourceType, sourceId } = req.params;
     const id = parseInt(sourceId, 10);
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid sourceId' });
+    }
 
     let text = '';
     let title = '';

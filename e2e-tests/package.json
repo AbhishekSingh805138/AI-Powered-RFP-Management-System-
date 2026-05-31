@@ -1,0 +1,13 @@
+{
+  "name": "rfp-management-e2e",
+  "version": "1.0.0",
+  "description": "Playwright End-to-End Tests for RFP Management System",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.43.0"
+  }
+}

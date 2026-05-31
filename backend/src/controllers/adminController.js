@@ -1,5 +1,6 @@
 const { User } = require('../models');
 const { Op } = require('sequelize');
+const bcrypt = require('bcryptjs');
 
 // GET /api/admin/users — List all users
 async function listUsers(req, res, next) {
@@ -88,9 +89,50 @@ async function changeStatus(req, res, next) {
   }
 }
 
+// POST /api/admin/users — Admin creates a new user with an assigned role
+async function createUser(req, res, next) {
+  try {
+    const { email, password, firstName, lastName, role } = req.body;
+
+    if (!email || !password || !firstName || !lastName) {
+      return res.status(400).json({ error: 'email, password, firstName, and lastName are required' });
+    }
+
+    if (role && !['admin', 'manager', 'viewer'].includes(role)) {
+      return res.status(400).json({ error: 'Valid role is required (admin, manager, viewer)' });
+    }
+
+    const existing = await User.findOne({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = await User.create({
+      email,
+      passwordHash,
+      firstName,
+      lastName,
+      role: role || 'viewer',
+    });
+
+    res.status(201).json({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      status: user.status,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
+  createUser,
   changeRole,
   changeStatus,
 };

@@ -24,8 +24,8 @@ const logger = winston.createLogger({
   exitOnError: false,
 });
 
-// Silence logs during tests to keep test output clean
-if (NODE_ENV === 'test') {
+// Silence logs during Jest unit/integration tests to keep output clean
+if (process.env.JEST_WORKER_ID) {
   logger.silent = true;
 }
 

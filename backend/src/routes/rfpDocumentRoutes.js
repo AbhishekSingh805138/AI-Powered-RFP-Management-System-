@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { requireRole } = require('../middleware/auth');
+const { requirePermission } = require('../middleware/auth');
 const { validate, validateQuery } = require('../middleware/validate');
 const { generateProposalSchema, updateProposalSchema, exportProposalQuery } = require('../middleware/validationSchemas');
 const { validatePdfContent } = require('../middleware/uploadSecurity');
@@ -19,18 +19,18 @@ const upload = multer({
   },
 });
 
-// Document endpoints — reads open to any authenticated user
-router.get('/', controller.listDocuments);
-router.get('/:id', controller.getDocument);
-router.post('/upload', requireRole('admin', 'manager'), upload.single('file'), validatePdfContent, controller.uploadDocument);
-router.post('/:id/extract', requireRole('admin', 'manager'), controller.extractRequirements);
-router.delete('/:id', requireRole('admin', 'manager'), controller.deleteDocument);
+// Document endpoints
+router.get('/', requirePermission('rfp:read'), controller.listDocuments);
+router.get('/:id', requirePermission('rfp:read'), controller.getDocument);
+router.post('/upload', requirePermission('rfp:write'), upload.single('file'), validatePdfContent, controller.uploadDocument);
+router.post('/:id/extract', requirePermission('rfp:write'), controller.extractRequirements);
+router.delete('/:id', requirePermission('rfp:delete'), controller.deleteDocument);
 
 // Generated proposal endpoints
-router.get('/:docId/proposals', controller.listGeneratedProposals);
-router.get('/:docId/proposals/:id', controller.getGeneratedProposal);
-router.post('/:id/generate', requireRole('admin', 'manager'), validate(generateProposalSchema), controller.generateProposal);
-router.put('/:docId/proposals/:id', requireRole('admin', 'manager'), validate(updateProposalSchema), controller.updateGeneratedProposal);
-router.get('/:docId/proposals/:id/export', validateQuery(exportProposalQuery), controller.exportProposal);
+router.get('/:docId/proposals', requirePermission('proposal:read'), controller.listGeneratedProposals);
+router.get('/:docId/proposals/:id', requirePermission('proposal:read'), controller.getGeneratedProposal);
+router.post('/:id/generate', requirePermission('proposal:write'), validate(generateProposalSchema), controller.generateProposal);
+router.put('/:docId/proposals/:id', requirePermission('proposal:write'), validate(updateProposalSchema), controller.updateGeneratedProposal);
+router.get('/:docId/proposals/:id/export', requirePermission('proposal:read'), validateQuery(exportProposalQuery), controller.exportProposal);
 
 module.exports = router;

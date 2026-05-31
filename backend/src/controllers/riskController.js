@@ -45,16 +45,21 @@ async function analyzeRisks(req, res, next) {
     }
 
     // Fallback: synchronous processing
-    const result = await riskService.analyzeRisks(rfpDoc, genProposal);
+    try {
+      const result = await riskService.analyzeRisks(rfpDoc, genProposal);
 
-    await riskAnalysis.update({
-      analysisData: result,
-      overallRiskScore: result.overall_risk_score,
-      overallRiskLevel: result.overall_risk_level,
-      status: 'completed',
-    });
+      await riskAnalysis.update({
+        analysisData: result,
+        overallRiskScore: result.overall_risk_score,
+        overallRiskLevel: result.overall_risk_level,
+        status: 'completed',
+      });
 
-    res.status(201).json(riskAnalysis);
+      res.status(201).json(riskAnalysis);
+    } catch (syncErr) {
+      await riskAnalysis.update({ status: 'failed' });
+      throw syncErr;
+    }
   } catch (err) {
     next(err);
   }
@@ -101,7 +106,7 @@ async function listRiskAnalyses(req, res, next) {
       where,
       attributes: ['id', 'rfpDocumentId', 'generatedProposalId', 'overallRiskScore', 'overallRiskLevel', 'status', 'createdAt'],
       include: [
-        { model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'title', 'originalFilename'], where: rfpWhere },
+        { model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'title', 'originalFilename'], where: rfpWhere, required: true },
       ],
       order: [['created_at', 'DESC']],
       limit,
@@ -131,7 +136,7 @@ async function compareRisks(req, res, next) {
 
     const analyses = await RiskAnalysis.findAll({
       where: { id: analysisIds, status: 'completed' },
-      include: [{ model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'userId'], where: rfpWhere }],
+      include: [{ model: RfpDocument, as: 'rfpDocument', attributes: ['id', 'userId'], where: rfpWhere, required: true }],
     });
 
     if (analyses.length < 2) {

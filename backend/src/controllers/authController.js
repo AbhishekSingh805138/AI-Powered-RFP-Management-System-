@@ -43,7 +43,8 @@ async function logout(req, res) {
 async function changePassword(req, res, next) {
   try {
     const { currentPassword, newPassword } = req.body;
-    const result = await authService.changePassword(req.user.id, { currentPassword, newPassword });
+    const currentAccessToken = req.headers.authorization?.split(' ')[1];
+    const result = await authService.changePassword(req.user.id, { currentPassword, newPassword }, currentAccessToken);
     res.json(result);
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });

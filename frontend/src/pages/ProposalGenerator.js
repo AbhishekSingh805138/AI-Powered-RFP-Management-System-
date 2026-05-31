@@ -146,16 +146,17 @@ function ProposalGenerator() {
           : 'application/pdf',
       });
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = window.document.createElement('a');
       link.href = url;
       link.download = `${(proposal.title || 'Proposal').replace(/[^a-zA-Z0-9_\- ]/g, '')}_v${proposal.version || 1}.${format}`;
-      document.body.appendChild(link);
+      window.document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
       setSuccessMsg(`${format.toUpperCase()} exported successfully!`);
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
+      console.error('Export error:', err);
       setError(`Failed to export ${format.toUpperCase()}`);
     } finally {
       setExporting(null);

@@ -130,6 +130,64 @@ describe('GET /api/admin/users/:id', () => {
   });
 });
 
+describe('POST /api/admin/users', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('201 — admin creates a new user with role', async () => {
+    mockModels.User.findOne.mockResolvedValue(null);
+    mockModels.User.create.mockResolvedValue({
+      id: 5, email: 'new@test.com', firstName: 'New', lastName: 'User', role: 'manager', status: 'active',
+    });
+
+    const res = await request(app).post('/api/admin/users').send({
+      email: 'new@test.com', password: 'Password123', firstName: 'New', lastName: 'User', role: 'manager',
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.email).toBe('new@test.com');
+    expect(res.body.role).toBe('manager');
+    expect(res.body.passwordHash).toBeUndefined(); // should not leak
+  });
+
+  test('409 — rejects duplicate email', async () => {
+    mockModels.User.findOne.mockResolvedValue({ id: 1, email: 'dup@test.com' });
+
+    const res = await request(app).post('/api/admin/users').send({
+      email: 'dup@test.com', password: 'Password123', firstName: 'A', lastName: 'B',
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  test('400 — rejects missing required fields', async () => {
+    const res = await request(app).post('/api/admin/users').send({ email: 'a@b.com' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('400 — rejects invalid role', async () => {
+    const res = await request(app).post('/api/admin/users').send({
+      email: 'a@b.com', password: 'Password123', firstName: 'A', lastName: 'B', role: 'superadmin',
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('defaults to viewer role when role not specified', async () => {
+    mockModels.User.findOne.mockResolvedValue(null);
+    mockModels.User.create.mockResolvedValue({
+      id: 6, email: 'def@test.com', firstName: 'Def', lastName: 'User', role: 'viewer', status: 'active',
+    });
+
+    const res = await request(app).post('/api/admin/users').send({
+      email: 'def@test.com', password: 'Password123', firstName: 'Def', lastName: 'User',
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.role).toBe('viewer');
+  });
+});
+
 describe('PUT /api/admin/users/:id/role', () => {
   beforeEach(() => jest.clearAllMocks());
 

@@ -106,7 +106,7 @@ const sendMessageSchema = z.object({
   content: z.string().trim().min(1, 'Message content is required').max(10000),
   options: z.object({
     topK: z.number().int().min(1).max(20).optional(),
-    filterSourceType: z.string().trim().optional(),
+    filterSourceType: z.string().trim().nullable().optional(),
   }).optional(),
 });
 
@@ -114,7 +114,7 @@ const sendMessageSchema = z.object({
 const searchSchema = z.object({
   query: z.string().trim().min(1, 'Search query is required').max(2000),
   topK: z.number().int().min(1).max(50).optional(),
-  filterSourceType: z.string().trim().optional(),
+  filterSourceType: z.string().trim().nullable().optional(),
 });
 
 // ── Compliance ──────────────────────────────────────────────

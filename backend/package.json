@@ -20,7 +20,8 @@
     "migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",
     "migrate:status": "npx sequelize-cli db:migrate:status",
     "seed": "npx sequelize-cli db:seed:all",
-    "seed:undo": "npx sequelize-cli db:seed:undo:all"
+    "seed:undo": "npx sequelize-cli db:seed:undo:all",
+    "setup:admin": "node scripts/setup-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

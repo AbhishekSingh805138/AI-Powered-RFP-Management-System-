@@ -17,8 +17,8 @@ async function listNotifications(req, res, next) {
       where.status = req.query.status;
     }
 
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const offset = (page - 1) * limit;
 
     const { count, rows } = await Notification.findAndCountAll({

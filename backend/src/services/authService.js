@@ -49,6 +49,14 @@ function generateTokens(user) {
 }
 
 async function register({ email, password, firstName, lastName }) {
+  // Check if self-registration is allowed (default: true for dev, set to 'false' in production)
+  const selfRegistrationAllowed = process.env.ALLOW_SELF_REGISTRATION !== 'false';
+  if (!selfRegistrationAllowed) {
+    const error = new Error('Self-registration is disabled. Contact an administrator.');
+    error.status = 403;
+    throw error;
+  }
+
   const existing = await User.scope('withPassword').findOne({ where: { email } });
   if (existing) {
     const error = new Error('Email already registered');
@@ -56,12 +64,24 @@ async function register({ email, password, firstName, lastName }) {
     throw error;
   }
 
+  // Self-registered users always get 'viewer' role.
+  // Use `npm run setup:admin` to create the initial admin account.
+  const requireApproval = process.env.REQUIRE_SIGNUP_APPROVAL === 'true';
+  const status = requireApproval ? 'suspended' : 'active';
+
   const passwordHash = await bcrypt.hash(password, 12);
-  const user = await User.create({ email, passwordHash, firstName, lastName });
+  const user = await User.create({ email, passwordHash, firstName, lastName, role: 'viewer', status });
+
+  if (requireApproval) {
+    return {
+      message: 'Registration successful. Your account is pending administrator approval.',
+      user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, status: user.status }
+    };
+  }
 
   const tokens = generateTokens(user);
   return {
-    user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role },
+    user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, status: user.status },
     ...tokens,
   };
 }
@@ -75,7 +95,7 @@ async function login({ email, password }) {
   }
 
   if (user.status === 'suspended') {
-    const error = new Error('Account is suspended');
+    const error = new Error('Account is pending approval or suspended. Please contact an administrator.');
     error.status = 403;
     throw error;
   }
@@ -121,7 +141,7 @@ function logout(accessToken, refreshTokenValue) {
   if (refreshTokenValue) blacklistToken(refreshTokenValue);
 }
 
-async function changePassword(userId, { currentPassword, newPassword }) {
+async function changePassword(userId, { currentPassword, newPassword }, currentAccessToken) {
   const user = await User.scope('withPassword').findByPk(userId);
   if (!user) {
     const error = new Error('User not found');
@@ -138,7 +158,15 @@ async function changePassword(userId, { currentPassword, newPassword }) {
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await user.update({ passwordHash });
-  return { message: 'Password changed successfully' };
+
+  // Blacklist the current access token so the user must re-authenticate
+  if (currentAccessToken) {
+    blacklistToken(currentAccessToken);
+  }
+
+  // Issue fresh tokens tied to the new password
+  const tokens = generateTokens(user);
+  return { message: 'Password changed successfully', ...tokens };
 }
 
 async function getProfile(userId) {

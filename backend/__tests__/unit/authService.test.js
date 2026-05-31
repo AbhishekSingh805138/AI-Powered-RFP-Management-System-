@@ -24,6 +24,7 @@ jest.mock('../../src/models', () => ({
   User: {
     findByPk: jest.fn(),
     create: jest.fn(),
+    count: jest.fn(),
     scope: jest.fn(function () { return this; }),
     findOne: jest.fn(),
   },
@@ -43,9 +44,9 @@ describe('authService', () => {
   });
 
   describe('register', () => {
-    test('creates a new user and returns tokens', async () => {
+    test('creates a new user with viewer role and returns tokens', async () => {
       User.findOne.mockResolvedValue(null);
-      User.create.mockResolvedValue({ id: 1, email: 'new@test.com', firstName: 'New', lastName: 'User', role: 'viewer' });
+      User.create.mockResolvedValue({ id: 2, email: 'new@test.com', firstName: 'New', lastName: 'User', role: 'viewer' });
 
       const result = await authService.register({
         email: 'new@test.com',
@@ -55,11 +56,39 @@ describe('authService', () => {
       });
 
       expect(result.user.email).toBe('new@test.com');
+      expect(result.user.role).toBe('viewer');
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
       expect(User.create).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'new@test.com', firstName: 'New' })
+        expect.objectContaining({ email: 'new@test.com', firstName: 'New', role: 'viewer' })
       );
+    });
+
+    test('always assigns viewer role (never auto-admin)', async () => {
+      User.findOne.mockResolvedValue(null);
+      User.create.mockResolvedValue({ id: 1, email: 'first@test.com', firstName: 'First', lastName: 'User', role: 'viewer' });
+
+      await authService.register({
+        email: 'first@test.com',
+        password: 'password123',
+        firstName: 'First',
+        lastName: 'User',
+      });
+
+      expect(User.create).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'viewer' })
+      );
+    });
+
+    test('throws 403 when self-registration is disabled', async () => {
+      const original = process.env.ALLOW_SELF_REGISTRATION;
+      process.env.ALLOW_SELF_REGISTRATION = 'false';
+
+      await expect(
+        authService.register({ email: 'new@test.com', password: 'Pass1234', firstName: 'A', lastName: 'B' })
+      ).rejects.toThrow('Self-registration is disabled');
+
+      process.env.ALLOW_SELF_REGISTRATION = original;
     });
 
     test('throws 409 if email already registered', async () => {
@@ -164,7 +193,20 @@ describe('authService', () => {
       const result = await authService.changePassword(1, { currentPassword: 'oldpass', newPassword: 'newpass123' });
 
       expect(result.message).toBe('Password changed successfully');
+      expect(result.accessToken).toBeDefined();
+      expect(result.refreshToken).toBeDefined();
       expect(user.update).toHaveBeenCalled();
+    });
+
+    test('blacklists current access token on password change', async () => {
+      const hash = await bcrypt.hash('oldpass', 10);
+      const user = { ...mockUser, passwordHash: hash, update: jest.fn() };
+      User.findByPk.mockResolvedValue(user);
+
+      const oldToken = jwt.sign({ id: 1, email: mockUser.email, role: mockUser.role }, process.env.JWT_SECRET, { expiresIn: '15m' });
+      await authService.changePassword(1, { currentPassword: 'oldpass', newPassword: 'newpass123' }, oldToken);
+
+      expect(authService.isTokenBlacklisted(oldToken)).toBe(true);
     });
 
     test('throws 401 if current password is wrong', async () => {
