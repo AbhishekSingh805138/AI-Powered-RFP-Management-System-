@@ -64,3 +64,66 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+  e2e-tests:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: rfp_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: rfp_test
+      DB_USER: postgres
+      DB_PASSWORD: test
+      JWT_SECRET: test-ci-jwt-secret-not-for-production
+      JWT_REFRESH_SECRET: test-ci-jwt-refresh-secret-not-for-production
+      OPENAI_API_KEY: sk-test-not-real
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install E2E tests dependencies
+        working-directory: e2e-tests
+        run: npm ci
+
+      - name: Run database migrations
+        working-directory: backend
+        run: npx sequelize-cli db:migrate --env test
+
+      - name: Install Playwright browsers
+        working-directory: e2e-tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: e2e-tests
+        run: npm test
+

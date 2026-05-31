@@ -1,13 +1,12 @@
-/**
- * Express app factory — separated from server.js so supertest can import the app
- * without starting the HTTP listener or requiring a live database connection.
- */
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
 const errorHandler = require('./middleware/errorHandler');
+const requestId = require('./middleware/requestId');
+const logger = require('./utils/logger');
 
 const authRoutes = require('./routes/authRoutes');
 const { authenticate } = require('./middleware/auth');
@@ -28,26 +27,63 @@ function createApp() {
   const app = express();
   const isProduction = process.env.NODE_ENV === 'production';
 
+  // Request ID for audit trails
+  app.use(requestId);
+
   // Security middleware
-  app.use(helmet());
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    hsts: {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true,
+    },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    frameguard: { action: 'deny' },
+  }));
+  
   app.use(compression());
+  
   app.use(cors({
     origin: process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(',')
-      : ['http://localhost:3000'],
+      : ['http://localhost:3000', 'http://localhost:3001'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+  }));
+
+  // HTTP request logging with request ID
+  morgan.token('request-id', (req) => req.id);
+  morgan.token('user-id', (req) => req.user?.id || '-');
+  const morganFormat = isProduction
+    ? ':request-id :remote-addr :method :url :status :res[content-length] - :response-time ms :user-id'
+    : ':request-id :method :url :status :response-time ms';
+  app.use(morgan(morganFormat, {
+    stream: { write: (msg) => logger.http(msg.trim()) },
+    skip: (req) => req.url === '/api/health' || req.url === '/api/healthz' || req.url === '/api/ready',
   }));
 
   // Rate limiting — disabled in test to avoid flaky tests
   if (process.env.NODE_ENV !== 'test') {
     const limiter = rateLimit({
-      windowMs: 15 * 60 * 1000,
+      windowMs: 15 * 60 * 1000, // 15 minutes
       max: isProduction ? 100 : 1000,
       message: { error: 'Too many requests, please try again later.' },
     });
     app.use('/api/', limiter);
 
+    // AI endpoints get stricter rate limits to control costs
     const aiLimiter = rateLimit({
       windowMs: 15 * 60 * 1000,
       max: isProduction ? 20 : 100,
@@ -87,6 +123,31 @@ function createApp() {
 
   // Public routes (no auth required)
   app.use('/api/auth', authRoutes);
+
+  // Liveness probe — is the process alive? (lightweight, no external deps)
+  app.get('/api/healthz', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Readiness probe — is the app ready to serve traffic? (checks dependencies)
+  app.get('/api/ready', async (req, res) => {
+    const checks = { database: 'unknown' };
+    let healthy = true;
+
+    try {
+      const { sequelize } = require('./models');
+      await sequelize.authenticate();
+      checks.database = 'connected';
+    } catch (err) {
+      checks.database = 'disconnected';
+      healthy = false;
+    }
+
+    const status = healthy ? 'ready' : 'not_ready';
+    res.status(healthy ? 200 : 503).json({ status, timestamp: new Date().toISOString(), checks });
+  });
+
+  // Backwards-compatible health endpoint
   app.get('/api/health', async (req, res) => {
     try {
       const { sequelize } = require('./models');

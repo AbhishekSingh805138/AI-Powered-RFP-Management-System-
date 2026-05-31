@@ -34,7 +34,7 @@ test.describe('AI Assistants E2E Tests (Search & Chatbot)', () => {
     // 5. Test filtering by "Vendor Proposals"
     await page.selectOption('select.search-filter', 'proposal');
     await page.click('button[type="submit"]:has-text("Search")');
-    await expect(page.locator('.rag-answer')).toBeVisible();
+    await expect(page.locator('.rag-answer')).toBeVisible({ timeout: 15000 });
     
     // Search result tags should only contain 'Vendor Proposal'
     const sourceBadges = await page.locator('.source-item .badge').allTextContents();

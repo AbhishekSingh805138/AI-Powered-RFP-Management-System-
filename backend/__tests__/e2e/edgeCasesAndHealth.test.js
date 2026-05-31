@@ -199,9 +199,7 @@ beforeEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// NOTE: /api/healthz and /api/ready are defined in server.js, not app.js,
-// so they are not available via createApp(). Only /api/health is in app.js.
-describe('E2E: Health Endpoint', () => {
+describe('E2E: Health & Probe Endpoints', () => {
   test('GET /api/health — healthy when DB is connected', async () => {
     const res = await request(app).get('/api/health');
 
@@ -221,10 +219,33 @@ describe('E2E: Health Endpoint', () => {
     expect(res.body.database).toBe('disconnected');
   });
 
-  test('health endpoint does not require authentication', async () => {
-    // /api/health is before the auth wall in app.js
-    const res = await request(app).get('/api/health');
+  test('GET /api/healthz — liveness returns 200 without DB checks', async () => {
+    const res = await request(app).get('/api/healthz');
     expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+  });
+
+  test('GET /api/ready — readiness healthy when DB is connected', async () => {
+    const res = await request(app).get('/api/ready');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ready');
+    expect(res.body.checks.database).toBe('connected');
+  });
+
+  test('GET /api/ready — readiness unhealthy when DB is down', async () => {
+    mockSequelize.authenticate.mockRejectedValueOnce(new Error('Connection refused'));
+    const res = await request(app).get('/api/ready');
+    expect(res.status).toBe(503);
+    expect(res.body.status).toBe('not_ready');
+    expect(res.body.checks.database).toBe('disconnected');
+  });
+
+  test('health and probe endpoints do not require authentication', async () => {
+    const paths = ['/api/health', '/api/healthz', '/api/ready'];
+    for (const path of paths) {
+      const res = await request(app).get(path);
+      expect(res.status).toBe(200);
+    }
   });
 });
 
