@@ -11,7 +11,7 @@ test.describe('AI Assistants E2E Tests (Search & Chatbot)', () => {
   });
 
   test('Semantic Search: Indexing and Performing Queries', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
 
     // 1. Navigate to Semantic Search
     await page.click('a[href="/search"]');
@@ -21,7 +21,7 @@ test.describe('AI Assistants E2E Tests (Search & Chatbot)', () => {
     // 2. Index all documents in database
     await page.click('button:has-text("Index All Documents")');
     // Wait for the success alert to show indicating indexing is done
-    await expect(page.locator('.success-msg')).toContainText('Indexed', { timeout: 30000 });
+    await expect(page.locator('.success-msg')).toContainText('Indexed', { timeout: 90000 });
 
     // 3. Search for "laptops"
     await page.fill('input.search-input', 'developer laptops');

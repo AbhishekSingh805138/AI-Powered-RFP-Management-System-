@@ -38,7 +38,7 @@ function RfpDetail() {
 
   useEffect(() => {
     loadRfp();
-    listVendors().then((res) => setAllVendors(res.data.data || res.data)).catch(() => {
+    listVendors({ limit: 100 }).then((res) => setAllVendors(res.data.data || res.data)).catch(() => {
       // Vendor dropdown will be empty — non-critical, RFP still loads
     });
   }, [loadRfp]);

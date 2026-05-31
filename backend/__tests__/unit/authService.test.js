@@ -146,7 +146,7 @@ describe('authService', () => {
 
       await expect(
         authService.login({ email: 'test@test.com', password: 'any' })
-      ).rejects.toThrow('Account is suspended');
+      ).rejects.toThrow('Account is pending approval or suspended. Please contact an administrator.');
     });
 
     test('updates lastLoginAt on successful login', async () => {

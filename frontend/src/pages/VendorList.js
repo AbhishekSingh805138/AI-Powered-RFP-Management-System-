@@ -18,7 +18,7 @@ function VendorList() {
 
   async function loadVendors() {
     try {
-      const res = await listVendors({ search });
+      const res = await listVendors({ search, limit: 100 });
       setVendors(res.data.data);
       setError('');
     } catch (err) {

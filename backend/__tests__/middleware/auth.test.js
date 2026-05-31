@@ -13,7 +13,7 @@ jest.mock('../../src/models', () => ({
 }));
 
 const { User } = require('../../src/models');
-const { authenticate, requireRole } = require('../../src/middleware/auth');
+const { authenticate, requireRole, requirePermission } = require('../../src/middleware/auth');
 
 function mockReqResNext(headers = {}) {
   const req = { headers };
@@ -119,6 +119,47 @@ describe('requireRole middleware', () => {
     const middleware = requireRole('admin');
     const { req, res, next } = mockReqResNext();
     req.user = { role: 'admin' };
+    middleware(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+});
+
+describe('requirePermission middleware', () => {
+  test('returns 401 if req.user is not set', () => {
+    const middleware = requirePermission('rfp:read');
+    const { req, res, next } = mockReqResNext();
+    middleware(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  test('returns 403 if user does not have permission', () => {
+    const middleware = requirePermission('rfp:write');
+    const { req, res, next } = mockReqResNext();
+    req.user = { role: 'viewer', status: 'active' }; // viewer only has rfp:read
+    middleware(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  test('returns 403 if user is suspended', () => {
+    const middleware = requirePermission('rfp:read');
+    const { req, res, next } = mockReqResNext();
+    req.user = { role: 'viewer', status: 'suspended' };
+    middleware(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  test('calls next() if user has permission', () => {
+    const middleware = requirePermission('rfp:read');
+    const { req, res, next } = mockReqResNext();
+    req.user = { role: 'viewer', status: 'active' };
+    middleware(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  test('calls next() for admin role on any permission', () => {
+    const middleware = requirePermission('some:wildcard:permission');
+    const { req, res, next } = mockReqResNext();
+    req.user = { role: 'admin', status: 'active' };
     middleware(req, res, next);
     expect(next).toHaveBeenCalled();
   });

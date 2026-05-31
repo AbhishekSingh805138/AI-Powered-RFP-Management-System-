@@ -89,6 +89,33 @@ jest.mock('../../src/services/chatService', () => ({
 }));
 
 jest.mock('../../src/middleware/auth', () => ({
+  requirePermission: (permission) => (req, res, next) => {
+    const ROLE_PERMISSIONS = {
+      admin: ['*'],
+      manager: [
+        'rfp:read', 'rfp:write', 'rfp:delete',
+        'proposal:read', 'proposal:write', 'proposal:finalize', 'proposal:compare',
+        'vendor:read', 'vendor:write',
+        'compliance:check', 'risk:manage',
+        'search:query', 'search:index',
+        'chat:access', 'chat:delete',
+        'analytics:read'
+      ],
+      viewer: [
+        'rfp:read',
+        'proposal:read',
+        'vendor:read',
+        'search:query',
+        'chat:access'
+      ]
+    };
+    const role = req.user?.role || 'viewer';
+    const permissions = ROLE_PERMISSIONS[role] || [];
+    if (permissions.includes('*') || permissions.includes(permission)) {
+      return next();
+    }
+    return res.status(403).json({ error: 'Insufficient permissions' });
+  },
   authenticate: (req, res, next) => {
     req.user = { id: 1, email: 'test@test.com', role: 'admin' };
     next();
