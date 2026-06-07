@@ -174,7 +174,8 @@ describe('App Navigation Links', () => {
     const App = require('../App').default;
     render(<App />);
     const navLinks = screen.getAllByRole('link');
-    expect(navLinks.length).toBe(12);
+    // 12 nav links + 1 skip-to-content accessibility link
+    expect(navLinks.length).toBe(13);
   });
 
   test('app title is displayed', () => {

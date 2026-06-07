@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter as Router, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -22,13 +22,54 @@ import UserManagement from './pages/UserManagement';
 import Notifications from './pages/Notifications';
 import './styles/App.css';
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 function AppLayout() {
   const { user, logout } = useAuth();
   const isManagerOrAdmin = user?.role === 'admin' || user?.role === 'manager';
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    closeSidebar();
+  }, [location.pathname, closeSidebar]);
+
+  // Close sidebar on Escape key
+  useEffect(() => {
+    const handleEsc = (e) => { if (e.key === 'Escape') closeSidebar(); };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [closeSidebar]);
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      <a href="#main-content" className="skip-to-content">Skip to content</a>
+
+      <button
+        className="sidebar-toggle"
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        aria-label={sidebarOpen ? 'Close navigation' : 'Open navigation'}
+        aria-expanded={sidebarOpen}
+      >
+        <span />
+      </button>
+
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
+        onClick={closeSidebar}
+        aria-hidden="true"
+      />
+
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} role="navigation" aria-label="Main navigation">
         <h1>RFP Manager</h1>
         <nav>
           <NavLink to="/" end>Dashboard</NavLink>
@@ -52,7 +93,8 @@ function AppLayout() {
           <button className="btn-logout" onClick={logout}>Logout</button>
         </div>
       </aside>
-      <main className="main-content">
+      <main className="main-content" id="main-content" role="main">
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/rfps" element={<RfpList />} />
