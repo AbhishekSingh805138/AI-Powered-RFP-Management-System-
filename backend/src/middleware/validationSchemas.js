@@ -156,6 +156,18 @@ const changeStatusSchema = z.object({
   status: z.enum(['active', 'suspended']),
 });
 
+const updateUserSchema = z.object({
+  email: z.string().email().max(255).optional(),
+  firstName: z.string().trim().min(1).max(100).optional(),
+  lastName: z.string().trim().min(1).max(100).optional(),
+  role: z.enum(['admin', 'manager', 'viewer']).optional(),
+  status: z.enum(['active', 'suspended']).optional(),
+}).refine((data) => Object.keys(data).length > 0, { message: 'At least one field must be provided' });
+
+const resetPasswordSchema = z.object({
+  password: passwordSchema,
+});
+
 module.exports = {
   idParam,
   // Auth
@@ -191,4 +203,6 @@ module.exports = {
   // Admin
   changeRoleSchema,
   changeStatusSchema,
+  updateUserSchema,
+  resetPasswordSchema,
 };

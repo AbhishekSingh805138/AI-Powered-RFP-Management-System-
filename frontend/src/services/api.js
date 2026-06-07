@@ -174,7 +174,9 @@ export const getNotificationStats = () => api.get('/notifications/stats');
 export const listUsers = (params) => api.get('/admin/users', { params });
 export const getUser = (id) => api.get(`/admin/users/${id}`);
 export const createUser = (data) => api.post('/admin/users', data);
+export const updateUser = (id, data) => api.put(`/admin/users/${id}`, data);
 export const changeUserRole = (id, role) => api.put(`/admin/users/${id}/role`, { role });
 export const changeUserStatus = (id, status) => api.put(`/admin/users/${id}/status`, { status });
+export const resetUserPassword = (id, password) => api.put(`/admin/users/${id}/password`, { password });
 
 export default api;
