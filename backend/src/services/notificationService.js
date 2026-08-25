@@ -93,7 +93,16 @@ async function deliverEmail(notification, { recipientEmail, subject, html, text 
  * Called from jobQueue.registerWorkers().
  */
 async function registerWorker(boss) {
-  await boss.work(JOB_NAME, { teamSize: 3, teamConcurrency: 1 }, async (job) => {
+  // The queue must exist before jobs can be sent to or worked from it (pg-boss v10+).
+  await boss.createQueue(JOB_NAME, {
+    retryLimit: 2,
+    retryDelay: 5,
+    expireInSeconds: 600,
+    retentionSeconds: 86400,
+    deleteAfterSeconds: 604800,
+  });
+
+  await boss.work(JOB_NAME, { batchSize: 1, localConcurrency: 3 }, async ([job]) => {
     const { notificationId, recipientEmail, subject, html, text } = job.data;
     logger.info('Job started: send-notification', { jobId: job.id, recipientEmail });
 

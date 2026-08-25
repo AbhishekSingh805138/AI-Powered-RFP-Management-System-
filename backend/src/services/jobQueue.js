@@ -1,4 +1,4 @@
-const PgBoss = require('pg-boss');
+const { PgBoss } = require('pg-boss');
 const logger = require('../utils/logger');
 
 let boss = null;
@@ -10,6 +10,19 @@ const JOBS = {
   GENERATE_PROPOSAL: 'generate-proposal',
   ANALYZE_RISKS: 'analyze-risks',
 };
+
+// Retention and retry policy. As of pg-boss v10 these are per-queue settings
+// applied at createQueue() time rather than constructor options.
+const QUEUE_OPTIONS = {
+  retryLimit: 2,
+  retryDelay: 5,
+  expireInSeconds: 600, // 10 minutes
+  retentionSeconds: 86400, // 24 hours
+  deleteAfterSeconds: 604800, // 7 days
+};
+
+// Each AI job runs one-at-a-time per handler invocation, two in parallel.
+const WORK_OPTIONS = { batchSize: 1, localConcurrency: 2 };
 
 /**
  * Initialize and start pg-boss. Call once at server startup.
@@ -29,12 +42,7 @@ async function start() {
       ssl: process.env.NODE_ENV === 'production'
         ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
         : false,
-      retryLimit: 2,
-      retryDelay: 5,
-      expireInMinutes: 10,
-      archiveCompletedAfterSeconds: 86400, // 24 hours
-      deleteAfterDays: 7,
-      monitorStateIntervalMinutes: 1,
+      monitorIntervalSeconds: 60,
     });
 
     boss.on('error', (err) => logger.error('pg-boss error', { error: err.message }));
@@ -66,11 +74,17 @@ async function registerWorkers() {
   const emailTemplates = require('./emailTemplates');
   const appUrl = process.env.APP_URL || null;
 
+  // Queues must exist before jobs can be sent to or worked from them (pg-boss v10+).
+  // createQueue is idempotent, so this is safe on every startup.
+  for (const name of Object.values(JOBS)) {
+    await boss.createQueue(name, QUEUE_OPTIONS);
+  }
+
   // Register notification email worker
   await notificationService.registerWorker(boss);
 
   // Extract Requirements Worker
-  await boss.work(JOBS.EXTRACT_REQUIREMENTS, { teamSize: 2, teamConcurrency: 1 }, async (job) => {
+  await boss.work(JOBS.EXTRACT_REQUIREMENTS, WORK_OPTIONS, async ([job]) => {
     const { documentId } = job.data;
     logger.info('Job started: extract-requirements', { jobId: job.id, documentId });
 
@@ -119,7 +133,7 @@ async function registerWorkers() {
   });
 
   // Generate Proposal Worker
-  await boss.work(JOBS.GENERATE_PROPOSAL, { teamSize: 2, teamConcurrency: 1 }, async (job) => {
+  await boss.work(JOBS.GENERATE_PROPOSAL, WORK_OPTIONS, async ([job]) => {
     const { documentId, proposalId, companyProfile } = job.data;
     logger.info('Job started: generate-proposal', { jobId: job.id, documentId, proposalId });
 
@@ -144,7 +158,7 @@ async function registerWorkers() {
   });
 
   // Analyze Risks Worker
-  await boss.work(JOBS.ANALYZE_RISKS, { teamSize: 2, teamConcurrency: 1 }, async (job) => {
+  await boss.work(JOBS.ANALYZE_RISKS, WORK_OPTIONS, async ([job]) => {
     const { riskAnalysisId, rfpDocumentId, generatedProposalId } = job.data;
     logger.info('Job started: analyze-risks', { jobId: job.id, riskAnalysisId });
 
@@ -211,7 +225,7 @@ async function enqueue(jobName, data, options = {}) {
   try {
     const jobId = await boss.send(jobName, data, {
       retryLimit: 2,
-      expireInMinutes: 10,
+      expireInSeconds: 600,
       ...options,
     });
     logger.info('Job enqueued', { jobName, jobId });
@@ -224,12 +238,24 @@ async function enqueue(jobName, data, options = {}) {
 
 /**
  * Get job status by ID.
+ *
+ * pg-boss v10+ scopes job lookups by queue, but callers (GET /api/jobs/:id)
+ * only carry the id. Pass queueName when it is known to skip the search.
  */
-async function getJobById(jobId) {
+async function getJobById(jobId, queueName = null) {
   if (!isReady || !boss) return null;
 
   try {
-    return await boss.getJobById(jobId);
+    if (queueName) return await boss.getJobById(queueName, jobId);
+
+    // Lazily required to avoid a circular import at module load.
+    const { JOB_NAME } = require('./notificationService');
+
+    for (const name of [...Object.values(JOBS), JOB_NAME]) {
+      const job = await boss.getJobById(name, jobId);
+      if (job) return job;
+    }
+    return null;
   } catch (err) {
     logger.error('Failed to get job status', { jobId, error: err.message });
     return null;
