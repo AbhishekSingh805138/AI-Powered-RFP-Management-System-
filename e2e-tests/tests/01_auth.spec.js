@@ -1,6 +1,12 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('Authentication and RBAC E2E Tests', () => {
+  // "Viewer RBAC Limits" signs in as the account registered by the first test,
+  // so they must run in order in a single worker. Without this, a failure
+  // restarts the worker, which re-evaluates viewerEmail below and leaves the
+  // later test signing in as an account that was never registered.
+  test.describe.configure({ mode: 'serial' });
+
   const viewerEmail = `viewer_${Date.now()}@company.com`;
   const viewerPassword = 'Password123';
 

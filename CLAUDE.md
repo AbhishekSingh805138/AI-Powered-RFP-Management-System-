@@ -230,6 +230,12 @@ AI-Powered RFP (Request for Proposal) Management System with a React frontend an
   - **Note for future work**: `sync()` and the migrations are not equivalent. Treat migrations as the source of truth; use `db:sync` only for throwaway databases.
   - **Verified against the tightened schema**: re-ran e2e specs 03–06 (the AI ones) — 5 passed. Confirmed at the row level that live inserts landed in every constrained table (`rfp_vendors` 2, `proposals` 2, `comparisons` 1, `generated_proposals` 1, `risk_analyses` 1, `chat_messages` 4), covering all 8 `NOT NULL` columns through real application paths. The backend unit tests mock the DB, so they cannot prove this.
 
+- **E2E Serial-Mode Audit** (completed 2026-08-25):
+  - Audited all 7 specs for undeclared cross-test state. Only **`01_auth.spec.js`** was actually at risk: 4 tests, and "Viewer RBAC Limits" signs in as the account the first test registers. Added `test.describe.configure({ mode: 'serial' })`.
+  - `03_rfp_lifecycle.spec.js` was previously listed as affected — **it is not**. It has a single test, so its module-level `timestamp` cannot cascade.
+  - `04` and `07` have 2 tests each but no module-scope shared state (each test logs in via its own `beforeEach`), so they need nothing.
+  - **Spec inventory**: 01=4 tests, 02=5, 03=1, 04=2, 05=1, 06=1, 07=2 (16 total). Only 01 and 02 carry cross-test dependencies; both are now serial.
+
 - **RfpList RBAC Gating** (completed 2026-08-25):
   - `RfpList.js` exposed three actions to viewers that the backend rejects: "Create New RFP" and the empty-state "Create one" link (both need `rfp:write`), and the per-row **Delete** button (needs `rfp:delete`). Viewers hold only `rfp:read`.
   - All three now gated behind `isManagerOrAdmin`, using the same derivation as `Dashboard.js:36`.
@@ -244,7 +250,6 @@ AI-Powered RFP (Request for Proposal) Management System with a React frontend an
 - Schema untouched by the cleanup: 6 migrations applied, 8 `NOT NULL` FK constraints, 40 indexes.
 
 ## Known Open Issues
-- **`01_auth.spec.js` and `03_rfp_lifecycle.spec.js`** share the same undeclared cross-test state (module-level `Date.now()`) without `serial` mode. They pass today only because nothing in them has failed yet; the first failure will cascade identically.
 - **`backend/.env`** holds a live OpenAI key and a Gmail app password in plaintext. It is gitignored (not committed), but consider rotation.
 
 ## What's Next (Post-MVP Enhancements)
