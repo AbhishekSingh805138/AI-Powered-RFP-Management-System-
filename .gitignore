@@ -8,3 +8,7 @@ dist/
 build/
 *.log
 .DS_Store
+
+# Playwright run artifacts — regenerated on every run
+playwright-report/
+test-results/
