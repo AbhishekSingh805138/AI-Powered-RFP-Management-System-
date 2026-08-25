@@ -1,5 +1,10 @@
 const { defineConfig, devices } = require('@playwright/test');
 
+// Override when port 3000 is already taken: E2E_FRONTEND_PORT=3001 npx playwright test
+// The backend's CORS defaults allow both 3000 and 3001.
+const FRONTEND_PORT = process.env.E2E_FRONTEND_PORT || '3000';
+const BASE_URL = `http://localhost:${FRONTEND_PORT}`;
+
 module.exports = defineConfig({
   testDir: './tests',
   fullyParallel: false,
@@ -8,7 +13,7 @@ module.exports = defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -32,11 +37,12 @@ module.exports = defineConfig({
     {
       command: 'npm start',
       cwd: '../frontend',
-      url: 'http://localhost:3000',
+      url: BASE_URL,
       reuseExistingServer: true,
       timeout: 90000,
       env: {
         BROWSER: 'none',
+        PORT: FRONTEND_PORT,
       },
     },
   ],

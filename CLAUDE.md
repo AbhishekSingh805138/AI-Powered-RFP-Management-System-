@@ -218,7 +218,7 @@ AI-Powered RFP (Request for Proposal) Management System with a React frontend an
   - **Root cause**: selector referenced a placeholder that does not exist — `input[placeholder="Search users..."]` vs the actual `"Search by name or email..."`
   - **Cascade**: Playwright restarts the worker after a failure, re-evaluating the module-level `manager_${Date.now()}` email, so the 3 remaining tests searched for a user that was never created (proven by 4 distinct timestamps ~33s apart). The app was not at fault — duplicate emails are correctly rejected with 409.
   - Fixed the selector and added `test.describe.configure({ mode: 'serial' })` to declare the cross-test dependency
-  - **Running e2e**: both servers must be up. The checked-in `playwright.config.js` `webServer` block sets `NODE_ENV=test`, which makes `jobQueue.start()` return `false` and disables the queue — run against a dev-mode backend to exercise the async path.
+  - **Running e2e**: `npx playwright test` from `e2e-tests/`. The config starts both servers itself (or reuses running ones). If port 3000 is taken: `E2E_FRONTEND_PORT=3001 npx playwright test` — the backend's CORS defaults allow 3000 and 3001.
   - Tests: 563 total (501 backend + 62 frontend), all passing; 16 e2e, all passing
 
 - **Migration Drift Resolved** (completed 2026-08-25):
@@ -229,6 +229,11 @@ AI-Powered RFP (Request for Proposal) Management System with a React frontend an
   - **`sync-db.js` hardened**: it uses `sequelize.sync({ alter: true })`, which is what created the drift — running it again would alter a correct schema back toward the association-relaxed shape. It now refuses to run when `SequelizeMeta` is populated (exits 1 pointing to `npm run migrate`), while still working normally on a fresh database.
   - **Note for future work**: `sync()` and the migrations are not equivalent. Treat migrations as the source of truth; use `db:sync` only for throwaway databases.
   - **Verified against the tightened schema**: re-ran e2e specs 03–06 (the AI ones) — 5 passed. Confirmed at the row level that live inserts landed in every constrained table (`rfp_vendors` 2, `proposals` 2, `comparisons` 1, `generated_proposals` 1, `risk_analyses` 1, `chat_messages` 4), covering all 8 `NOT NULL` columns through real application paths. The backend unit tests mock the DB, so they cannot prove this.
+
+- **E2E Config Fixes** (completed 2026-08-25):
+  - **Queue was disabled during e2e**: the config's `webServer` runs the backend with `NODE_ENV=test`, and `jobQueue.start()` bailed on that — so the suite silently exercised the synchronous fallback, never the async queue. `NODE_ENV=test` is load-bearing though: `proposalController.js:103` and `rfpDocumentController.js:19` use it for pdf-parse fallbacks, and it relaxes rate limits. So the guard now keys on `JEST_WORKER_ID` instead (the convention already used in `logger.js:28`) — unit tests still skip the queue, e2e gets the real one. Verified: `NODE_ENV=test node src/server.js` now logs "Job queue started".
+  - **Hardcoded port 3000**: `baseURL` and the frontend `webServer` are now driven by `E2E_FRONTEND_PORT` (default 3000), and the port is passed through to `react-scripts` so the spawned server matches the URL being polled.
+  - Verified end-to-end through the checked-in config with Playwright spawning its own servers: 4/4 in `01_auth`. 501 backend tests still pass.
 
 - **E2E Serial-Mode Audit** (completed 2026-08-25):
   - Audited all 7 specs for undeclared cross-test state. Only **`01_auth.spec.js`** was actually at risk: 4 tests, and "Viewer RBAC Limits" signs in as the account the first test registers. Added `test.describe.configure({ mode: 'serial' })`.

@@ -29,7 +29,11 @@ const WORK_OPTIONS = { batchSize: 1, localConcurrency: 2 };
  * Returns false if queue cannot start (e.g., no DB connection).
  */
 async function start() {
-  if (process.env.NODE_ENV === 'test') return false;
+  // Unit tests must never open a real queue connection. Keyed to Jest rather
+  // than NODE_ENV because the e2e suite runs the backend with NODE_ENV=test to
+  // get the relaxed rate limits and pdf-parse fallbacks, and it still needs the
+  // real queue -- that async path is precisely what it exists to exercise.
+  if (process.env.JEST_WORKER_ID) return false;
   if (isReady) return true;
 
   try {
