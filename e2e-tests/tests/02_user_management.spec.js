@@ -1,6 +1,12 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('Admin User Management E2E Tests', () => {
+  // These tests share the manager account created by the first test, so they must
+  // run in order in a single worker. Without this, a failure restarts the worker,
+  // which re-evaluates managerEmail below and leaves the rest hunting for a user
+  // that was never created.
+  test.describe.configure({ mode: 'serial' });
+
   const managerEmail = `manager_${Date.now()}@company.com`;
   const managerPassword = 'Password123';
 
@@ -42,7 +48,7 @@ test.describe('Admin User Management E2E Tests', () => {
 
   test('Search and Filter Users', async ({ page }) => {
     // 1. Enter manager email in search box
-    await page.fill('input[placeholder="Search users..."]', managerEmail);
+    await page.fill('input[placeholder="Search by name or email..."]', managerEmail);
     await page.click('button:has-text("Search")');
 
     // 2. Verify only the matching user is displayed
