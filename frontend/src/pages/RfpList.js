@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { listRfps, deleteRfp } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 function RfpList() {
   const [rfps, setRfps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
+  const isManagerOrAdmin = user?.role === 'admin' || user?.role === 'manager';
 
   useEffect(() => {
     loadRfps();
@@ -39,7 +42,7 @@ function RfpList() {
     <div>
       <div className="page-header">
         <h1>RFPs</h1>
-        <Link to="/rfps/new" className="btn btn-primary">Create New RFP</Link>
+        {isManagerOrAdmin && <Link to="/rfps/new" className="btn btn-primary">Create New RFP</Link>}
       </div>
 
       {error && (
@@ -50,7 +53,9 @@ function RfpList() {
 
       <div className="card">
         {rfps.length === 0 ? (
-          <p>No RFPs found. <Link to="/rfps/new">Create one</Link></p>
+          isManagerOrAdmin
+            ? <p>No RFPs found. <Link to="/rfps/new">Create one</Link></p>
+            : <p>No RFPs found.</p>
         ) : (
           <table>
             <thead>
@@ -77,7 +82,9 @@ function RfpList() {
                   <td>{rfp.proposals?.length || 0}</td>
                   <td>
                     <Link to={`/rfps/${rfp.id}`} className="btn btn-secondary btn-sm" style={{ marginRight: 4 }}>View</Link>
-                    <button onClick={() => handleDelete(rfp.id)} className="btn btn-danger btn-sm">Delete</button>
+                    {isManagerOrAdmin && (
+                      <button onClick={() => handleDelete(rfp.id)} className="btn btn-danger btn-sm">Delete</button>
+                    )}
                   </td>
                 </tr>
               ))}
